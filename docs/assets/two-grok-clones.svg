@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-label="One Grok Bot.app becomes Work and Personal clones">
+  <rect width="960" height="360" rx="24" fill="#111318"/>
+  <text x="40" y="48" fill="#F4F4F5" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700">Lots of Agents</text>
+  <text x="40" y="76" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">One Grok Bot.app · two Cursor-tier logins</text>
+
+  <rect x="40" y="110" width="220" height="180" rx="18" fill="#1C1F27" stroke="#3F3F46"/>
+  <text x="150" y="155" text-anchor="middle" fill="#E4E4E7" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="600">Grok Bot.app</text>
+  <text x="150" y="180" text-anchor="middle" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">com.anysphere.sand</text>
+  <text x="150" y="210" text-anchor="middle" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">/Applications</text>
+  <text x="150" y="248" text-anchor="middle" fill="#86EFAC" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">update once</text>
+
+  <path d="M270 200 H330" stroke="#71717A" stroke-width="2"/>
+  <polygon points="330,194 344,200 330,206" fill="#71717A"/>
+
+  <rect x="360" y="90" width="250" height="110" rx="16" fill="#172554" stroke="#3B82F6"/>
+  <text x="485" y="130" text-anchor="middle" fill="#DBEAFE" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="600">Grok Bot Work</text>
+  <text x="485" y="154" text-anchor="middle" fill="#93C5FD" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">--user-data-dir Work</text>
+  <text x="485" y="176" text-anchor="middle" fill="#93C5FD" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">Ultra / Teams login</text>
+
+  <rect x="360" y="220" width="250" height="110" rx="16" fill="#14532D" stroke="#22C55E"/>
+  <text x="485" y="260" text-anchor="middle" fill="#DCFCE7" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="600">Grok Bot Personal</text>
+  <text x="485" y="284" text-anchor="middle" fill="#86EFAC" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">--user-data-dir Personal</text>
+  <text x="485" y="306" text-anchor="middle" fill="#86EFAC" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">SuperGrok Heavy login</text>
+
+  <rect x="650" y="130" width="270" height="160" rx="16" fill="#1C1F27" stroke="#3F3F46"/>
+  <text x="785" y="170" text-anchor="middle" fill="#E4E4E7" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15" font-weight="600">Both stay signed in</text>
+  <text x="785" y="198" text-anchor="middle" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">sand:// hits the clone in</text>
+  <text x="785" y="218" text-anchor="middle" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">sign-in mode</text>
+  <text x="785" y="250" text-anchor="middle" fill="#A1A1AA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12">Also clones Cursor</text>
+</svg>
