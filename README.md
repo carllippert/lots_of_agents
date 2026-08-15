@@ -9,7 +9,7 @@ One binary. Update once. Every clone picks it up. No copying `.app` bundles.
 Not affiliated with xAI, Anysphere, Anthropic, or OpenAI.
 
 <p align="center">
-  <img src="docs/assets/lots-of-agents-icon.png" width="128" alt="Lots of Agents icon" />
+  <img src="docs/assets/dock-clones.png" alt="Lots of Agents — multiple tinted clones in the Dock" width="720" />
 </p>
 
 **Download:** [Latest Release](https://github.com/carllippert/lots_of_agents/releases/latest) (`Lots-of-Agents-unsigned.zip`)
