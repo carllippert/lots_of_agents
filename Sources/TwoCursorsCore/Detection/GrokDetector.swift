@@ -33,3 +33,37 @@ public struct CursorDetector {
         CursorDetector().status()
     }
 }
+
+/// Matches Claude Desktop by `com.anthropic.claudefordesktop`.
+public struct ClaudeDetector {
+    public var detector: InstalledAppDetector
+
+    public init(detector: InstalledAppDetector = InstalledAppDetector()) {
+        self.detector = detector
+    }
+
+    public func status() -> AppStatus {
+        ClaudeRecipe().detect(using: detector)
+    }
+
+    public static func live() -> AppStatus {
+        ClaudeDetector().status()
+    }
+}
+
+/// Matches ChatGPT Desktop / Codex by `com.openai.codex`.
+public struct ChatGPTDetector {
+    public var detector: InstalledAppDetector
+
+    public init(detector: InstalledAppDetector = InstalledAppDetector()) {
+        self.detector = detector
+    }
+
+    public func status() -> AppStatus {
+        ChatGPTRecipe().detect(using: detector)
+    }
+
+    public static func live() -> AppStatus {
+        ChatGPTDetector().status()
+    }
+}

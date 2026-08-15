@@ -39,8 +39,16 @@ lipo_or_copy TwoCursors "$APP/Contents/MacOS/TwoCursors"
 lipo_or_copy TwoCursorsLauncher "$APP/Contents/MacOS/TwoCursorsLauncher"
 chmod +x "$APP/Contents/MacOS/TwoCursors" "$APP/Contents/MacOS/TwoCursorsLauncher"
 
-if [ -f docs/assets/two-grok-clones.svg ]; then
-  cp docs/assets/two-grok-clones.svg "$APP/Contents/Resources/" || true
+if [ -f Sources/TwoCursors/Resources/AppIcon.icns ]; then
+  cp Sources/TwoCursors/Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+fi
+if [ -f Sources/TwoCursors/Resources/BrandMark.png ]; then
+  cp Sources/TwoCursors/Resources/BrandMark.png "$APP/Contents/Resources/BrandMark.png"
+fi
+# Copy SPM resource bundle if present (BrandMark for SwiftUI)
+RES_BUNDLE="$(find .build -path '*/TwoCursors_TwoCursors.bundle' -type d 2>/dev/null | head -1 || true)"
+if [ -n "$RES_BUNDLE" ] && [ -d "$RES_BUNDLE" ]; then
+  cp -R "$RES_BUNDLE" "$APP/Contents/Resources/"
 fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -52,6 +60,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <string>en</string>
   <key>CFBundleExecutable</key>
   <string>TwoCursors</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
   <string>${BUNDLE_ID}</string>
   <key>CFBundleInfoDictionaryVersion</key>

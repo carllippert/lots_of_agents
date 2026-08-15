@@ -10,7 +10,7 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-NAME="${GITHUB_REPO_NAME:-lots-of-agents}"
+NAME="${GITHUB_REPO_NAME:-lots_of_agents}"
 VIS="${GITHUB_REPO_VISIBILITY:-public}"
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -26,9 +26,8 @@ fi
 if git remote get-url origin >/dev/null 2>&1; then
   echo "origin already set: $(git remote get-url origin)"
 else
-  gh repo create "$NAME" --"$VIS" --source . --remote origin --description "Isolated Grok Bot (and Cursor) clones on macOS — two logins, one binary."
+  gh repo create "$NAME" --"$VIS" --source . --remote origin --description "Multiple signed-in clones of Grok Bot, Cursor, Claude, and ChatGPT on one Mac."
 fi
 
 git push -u origin HEAD
 echo "Repo: $(gh repo view --json url -q .url)"
-echo "Do not attach an unsigned zip as the public download. Wait for the notarized DMG."

@@ -34,6 +34,41 @@ public struct CursorRecipe: AppRecipe {
     public init() {}
 }
 
+public struct ClaudeRecipe: AppRecipe {
+    public static let bundleIdentifier = "com.anthropic.claudefordesktop"
+
+    public let id = "claude"
+    public let displayName = "Claude"
+    public let appFileNames = ["Claude.app"]
+    public let requiredBundleIDs = [ClaudeRecipe.bundleIdentifier]
+    public let executableName = "Claude"
+    public let defaultUserDataFolderName = "Claude"
+    public let urlSchemes = ["claude"]
+    public let seedsMarketplace = false
+    public let supportsUserDataDir = true
+    public let downloadURL = URL(string: "https://claude.ai/download")!
+
+    public init() {}
+}
+
+public struct ChatGPTRecipe: AppRecipe {
+    /// Desktop ChatGPT ships as Codex under this bundle ID.
+    public static let bundleIdentifier = "com.openai.codex"
+
+    public let id = "chatgpt"
+    public let displayName = "ChatGPT"
+    public let appFileNames = ["ChatGPT.app"]
+    public let requiredBundleIDs = [ChatGPTRecipe.bundleIdentifier]
+    public let executableName = "ChatGPT"
+    public let defaultUserDataFolderName = "ChatGPT"
+    public let urlSchemes = ["codex"]
+    public let seedsMarketplace = false
+    public let supportsUserDataDir = true
+    public let downloadURL = URL(string: "https://chatgpt.com/desktop")!
+
+    public init() {}
+}
+
 public protocol AppRecipe {
     var id: String { get }
     var displayName: String { get }
@@ -73,9 +108,11 @@ public extension AppRecipe {
 public enum RecipeRegistry {
     public static let grok = GrokRecipe()
     public static let cursor = CursorRecipe()
+    public static let claude = ClaudeRecipe()
+    public static let chatgpt = ChatGPTRecipe()
 
-    /// Grok is the launch product; Cursor is the second recipe.
-    public static var all: [any AppRecipe] { [grok, cursor] }
+    /// Agent apps only: Grok Bot, Cursor, Claude, ChatGPT/Codex.
+    public static var all: [any AppRecipe] { [grok, cursor, claude, chatgpt] }
 
     public static func recipe(id: String) -> (any AppRecipe)? {
         all.first { $0.id == id }

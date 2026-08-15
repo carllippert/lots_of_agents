@@ -7,12 +7,16 @@ import TwoCursorsCore
 final class AppModel: ObservableObject {
     @Published var cursor: AppStatus
     @Published var grok: AppStatus
+    @Published var claude: AppStatus
+    @Published var chatgpt: AppStatus
     @Published var profiles: [Profile] = []
     @Published var selectedID: UUID?
     @Published var liveIDs: Set<UUID> = []
     @Published var errorMessage: String?
     @Published var showingCreate = false
     @Published var editingIconFor: Profile?
+    @Published var selectedRecipeID: String?
+    @Published var createRecipeID = GrokRecipe().id
 
     let store: ProfileStore
     let launcher = ProfileLauncher()
@@ -28,6 +32,8 @@ final class AppModel: ObservableObject {
         self.detector = detector
         self.cursor = CursorDetector(detector: detector).status()
         self.grok = GrokDetector(detector: detector).status()
+        self.claude = ClaudeDetector(detector: detector).status()
+        self.chatgpt = ChatGPTDetector(detector: detector).status()
         do {
             self.store = try ProfileStore()
             self.profiles = store.profiles
@@ -49,9 +55,39 @@ final class AppModel: ObservableObject {
         profiles.first { $0.id == selectedID } ?? profiles.first
     }
 
+    func status(for recipeID: String) -> AppStatus {
+        switch recipeID {
+        case CursorRecipe().id: return cursor
+        case ClaudeRecipe().id: return claude
+        case ChatGPTRecipe().id: return chatgpt
+        default: return grok
+        }
+    }
+
+    var anySupportedAppInstalled: Bool {
+        RecipeRegistry.all.contains { status(for: $0.id).isInstalled }
+    }
+
+    func openCreate(recipeID: String? = nil) {
+        createRecipeID = recipeID ?? selectedRecipeID ?? GrokRecipe().id
+        showingCreate = true
+    }
+
+    func showRecipe(_ recipeID: String) {
+        selectedRecipeID = recipeID
+        selectedID = nil
+    }
+
+    func showLanding() {
+        selectedRecipeID = nil
+        selectedID = nil
+    }
+
     func refresh() {
         cursor = CursorDetector(detector: detector).status()
         grok = GrokDetector(detector: detector).status()
+        claude = ClaudeDetector(detector: detector).status()
+        chatgpt = ChatGPTDetector(detector: detector).status()
         profiles = store.profiles
         refreshLive()
         reapplyIconsIfNeeded()
@@ -88,6 +124,7 @@ final class AppModel: ObservableObject {
             try installSupport(for: profile)
             profiles = store.profiles
             selectedID = profile.id
+            selectedRecipeID = profile.recipeID
             showingCreate = false
         } catch {
             errorMessage = error.localizedDescription
@@ -206,6 +243,20 @@ struct TwoCursorsApp: App {
 
     init() {
         NSApplication.shared.setActivationPolicy(.regular)
+        Self.applyBrandIcon()
+    }
+
+    private static func applyBrandIcon() {
+        let candidates = [
+            Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/AppIcon.icns"),
+        ]
+        for url in candidates {
+            guard let url, FileManager.default.fileExists(atPath: url.path),
+                  let image = NSImage(contentsOf: url) else { continue }
+            NSApplication.shared.applicationIconImage = image
+            return
+        }
     }
 
     var body: some Scene {

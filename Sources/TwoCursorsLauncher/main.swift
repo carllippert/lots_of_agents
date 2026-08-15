@@ -49,7 +49,7 @@ enum TwoCursorsLauncherMain {
         env.removeValue(forKey: "ELECTRON_RUN_AS_NODE")
         if profile.isolation == .fullHomeOverlay {
             let overlay = store.overlayHomeURL(for: profile)
-            try HomeOverlay.prepare(overlayRoot: overlay, realHome: FileManager.default.homeDirectoryForCurrentUser)
+            try HomeOverlay.prepare(overlayRoot: overlay, realHome: TwoCursorsPaths.accountHome())
             env["HOME"] = overlay.path
             env["CURSOR_DATA_DIR"] = overlay.appendingPathComponent(".cursor").path
         }

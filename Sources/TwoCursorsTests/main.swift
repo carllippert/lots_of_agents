@@ -13,7 +13,13 @@ enum TwoCursorsTests {
         runningPID()
         liveCursor()
         liveGrok()
+        liveClaude()
+        liveChatGPT()
         grokRecipe()
+        claudeRecipe()
+        chatGPTRecipe()
+        detectFixtureClaude()
+        detectFixtureChatGPT()
         storeRoundTrip()
         uniqueSlugs()
         seedMarketplace()
@@ -119,6 +125,7 @@ enum TwoCursorsTests {
             let reloaded = try ProfileStore(root: root)
             check(reloaded.profiles.first?.name == "Work", "reload name")
             check(reloaded.profiles.first?.icon.badge == "WORK", "reload badge")
+            check(reloaded.profiles.first?.icon.showsBadge == true, "badge on when text was set")
             check(reloaded.profiles.first?.recipeID == "grok", "default recipe is grok")
         } catch {
             check(false, "storeRoundTrip \(error)")
@@ -289,6 +296,87 @@ enum TwoCursorsTests {
         check(recipe.supportsUserDataDir, "electron flags")
         check(RecipeRegistry.all.first?.id == "grok", "grok is primary recipe")
         check(RecipeRegistry.all.contains { $0.id == "cursor" }, "cursor still registered")
+        check(RecipeRegistry.all.contains { $0.id == "claude" }, "claude registered")
+        check(RecipeRegistry.all.contains { $0.id == "chatgpt" }, "chatgpt registered")
+    }
+
+    static func chatGPTRecipe() {
+        let recipe = ChatGPTRecipe()
+        check(recipe.id == "chatgpt", "id")
+        check(recipe.requiredBundleIDs == ["com.openai.codex"], "bundle ids")
+        check(recipe.appFileNames == ["ChatGPT.app"], "app file")
+        check(recipe.executableName == "ChatGPT", "exec")
+        check(recipe.urlSchemes == ["codex"], "scheme")
+        check(!recipe.seedsMarketplace, "no marketplace")
+        check(recipe.supportsUserDataDir, "electron flags")
+    }
+
+    static func detectFixtureChatGPT() {
+        do {
+            let root = try makeFixtureChatGPT()
+            let detector = InstalledAppDetector(searchRoots: [root], running: StaticRunningApps([]))
+            let status = ChatGPTDetector(detector: detector).status()
+            check(status.isInstalled, "fixture ChatGPT should be installed")
+            check(status.bundleIdentifier == ChatGPTRecipe.bundleIdentifier, "chatgpt bundle id")
+            check(status.isExecutable, "executable")
+        } catch {
+            check(false, "detectFixtureChatGPT \(error)")
+        }
+    }
+
+    static func liveChatGPT() {
+        let status = ChatGPTDetector.live()
+        if !status.isInstalled {
+            print("SKIP liveChatGPT — ChatGPT is not installed")
+            return
+        }
+        check(status.bundleIdentifier == ChatGPTRecipe.bundleIdentifier, "live chatgpt bundle id")
+        check(status.bundleIdentifier == "com.openai.codex", "live codex id")
+        check(status.isExecutable, "live chatgpt executable")
+        let reallyRunning = WorkspaceRunningApps().runningApplications().contains {
+            $0.bundleIdentifier == ChatGPTRecipe.bundleIdentifier
+        }
+        check(status.isRunning == reallyRunning, "live chatgpt running flag \(status.isRunning) vs \(reallyRunning)")
+        print("LIVE ChatGPT \(status.versionLabel) installed=\(status.isInstalled) running=\(status.isRunning) path=\(status.appURL?.path ?? "?")")
+    }
+
+    static func claudeRecipe() {
+        let recipe = ClaudeRecipe()
+        check(recipe.id == "claude", "id")
+        check(recipe.requiredBundleIDs == ["com.anthropic.claudefordesktop"], "bundle ids")
+        check(recipe.appFileNames == ["Claude.app"], "app file")
+        check(recipe.executableName == "Claude", "exec")
+        check(recipe.urlSchemes == ["claude"], "scheme")
+        check(!recipe.seedsMarketplace, "no marketplace")
+        check(recipe.supportsUserDataDir, "electron flags")
+    }
+
+    static func detectFixtureClaude() {
+        do {
+            let root = try makeFixtureClaude()
+            let detector = InstalledAppDetector(searchRoots: [root], running: StaticRunningApps([]))
+            let status = ClaudeDetector(detector: detector).status()
+            check(status.isInstalled, "fixture Claude should be installed")
+            check(status.bundleIdentifier == ClaudeRecipe.bundleIdentifier, "claude bundle id")
+            check(status.isExecutable, "executable")
+        } catch {
+            check(false, "detectFixtureClaude \(error)")
+        }
+    }
+
+    static func liveClaude() {
+        let status = ClaudeDetector.live()
+        if !status.isInstalled {
+            print("SKIP liveClaude — Claude is not installed")
+            return
+        }
+        check(status.bundleIdentifier == ClaudeRecipe.bundleIdentifier, "live claude bundle id")
+        check(status.isExecutable, "live claude executable")
+        let reallyRunning = WorkspaceRunningApps().runningApplications().contains {
+            $0.bundleIdentifier == ClaudeRecipe.bundleIdentifier
+        }
+        check(status.isRunning == reallyRunning, "live claude running flag \(status.isRunning) vs \(reallyRunning)")
+        print("LIVE Claude \(status.versionLabel) installed=\(status.isInstalled) running=\(status.isRunning) path=\(status.appURL?.path ?? "?")")
     }
 
     static func seedGrokNoGallery() {
@@ -341,6 +429,32 @@ private func makeFixtureGrok() throws -> URL {
         "CFBundleVersion": "16",
     ], to: root.appendingPathComponent("Grok Bot.app/Contents/Info.plist"))
     try writeExecutable(macos.appendingPathComponent("Grok Bot"))
+    return root
+}
+
+private func makeFixtureClaude() throws -> URL {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("tc-claude-\(UUID().uuidString)")
+    let macos = root.appendingPathComponent("Claude.app/Contents/MacOS")
+    try FileManager.default.createDirectory(at: macos, withIntermediateDirectories: true)
+    try writePlist([
+        "CFBundleIdentifier": ClaudeRecipe.bundleIdentifier,
+        "CFBundleShortVersionString": "1.0.0",
+        "CFBundleVersion": "1",
+    ], to: root.appendingPathComponent("Claude.app/Contents/Info.plist"))
+    try writeExecutable(macos.appendingPathComponent("Claude"))
+    return root
+}
+
+private func makeFixtureChatGPT() throws -> URL {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("tc-chatgpt-\(UUID().uuidString)")
+    let macos = root.appendingPathComponent("ChatGPT.app/Contents/MacOS")
+    try FileManager.default.createDirectory(at: macos, withIntermediateDirectories: true)
+    try writePlist([
+        "CFBundleIdentifier": ChatGPTRecipe.bundleIdentifier,
+        "CFBundleShortVersionString": "26.0.0",
+        "CFBundleVersion": "26",
+    ], to: root.appendingPathComponent("ChatGPT.app/Contents/Info.plist"))
+    try writeExecutable(macos.appendingPathComponent("ChatGPT"))
     return root
 }
 

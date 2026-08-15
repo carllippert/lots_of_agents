@@ -71,7 +71,7 @@ public struct ProfileLauncher {
             let overlay = store.overlayHomeURL(for: profile)
             try HomeOverlay.prepare(
                 overlayRoot: overlay,
-                realHome: fileManager.homeDirectoryForCurrentUser,
+                realHome: TwoCursorsPaths.accountHome(fileManager: fileManager),
                 fileManager: fileManager
             )
             env["HOME"] = overlay.path

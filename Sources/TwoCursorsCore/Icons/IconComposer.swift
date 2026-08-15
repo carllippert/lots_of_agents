@@ -6,6 +6,7 @@ public enum IconComposer {
         let canvas = NSImage(size: NSSize(width: size, height: size))
         canvas.lockFocus()
         NSGraphicsContext.current?.imageInterpolation = .high
+        defer { canvas.unlockFocus() }
 
         let rect = NSRect(x: 0, y: 0, width: size, height: size)
         let radius = size * 0.22
@@ -13,10 +14,10 @@ public enum IconComposer {
 
         if let custom = pngImage(spec.customImagePNG) {
             path.addClip()
-            custom.draw(in: rect, from: .zero, operation: .copy, fraction: 1)
+            custom.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
         } else if let base {
             path.addClip()
-            base.draw(in: rect, from: .zero, operation: .copy, fraction: 1)
+            base.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
         } else {
             (NSColor(hex: spec.tintHex) ?? .systemBlue).setFill()
             path.fill()
@@ -30,32 +31,10 @@ public enum IconComposer {
         }
 
         let badge = spec.badge.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !badge.isEmpty {
-            let fontSize = size * 0.16
-            let font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: NSColor.white,
-            ]
-            let text = NSAttributedString(string: String(badge.prefix(8)).uppercased(), attributes: attributes)
-            let textSize = text.size()
-            let padding = size * 0.06
-            let badgeRect = NSRect(
-                x: (size - textSize.width) / 2 - padding,
-                y: size * 0.08,
-                width: textSize.width + padding * 2,
-                height: textSize.height + padding * 0.6
-            )
-            NSColor.black.withAlphaComponent(0.72).setFill()
-            NSBezierPath(roundedRect: badgeRect, xRadius: size * 0.04, yRadius: size * 0.04).fill()
-            let textOrigin = NSPoint(
-                x: badgeRect.midX - textSize.width / 2,
-                y: badgeRect.midY - textSize.height / 2
-            )
-            text.draw(at: textOrigin)
+        if spec.showsBadge, !badge.isEmpty {
+            drawTextBadge(badge, size: size)
         }
 
-        canvas.unlockFocus()
         return canvas
     }
 
@@ -81,10 +60,7 @@ public enum IconComposer {
         for (baseSize, scale) in sizes {
             let pixel = baseSize * scale
             let name = scale == 1 ? "icon_\(baseSize)x\(baseSize).png" : "icon_\(baseSize)x\(baseSize)@2x.png"
-            let resized = resizedImage(image, pixels: pixel)
-            guard let tiff = resized.tiffRepresentation,
-                  let rep = NSBitmapImageRep(data: tiff),
-                  let png = rep.representation(using: .png, properties: [:]) else {
+            guard let png = pngDataPreservingAlpha(image, pixels: pixel) else {
                 throw TwoCursorsError.iconFailed("Could not encode PNG at \(pixel)px.")
             }
             try png.write(to: iconset.appendingPathComponent(name))
@@ -115,6 +91,10 @@ public enum IconComposer {
             path = "/Applications/Grok Bot.app"
         case CursorRecipe().id:
             path = "/Applications/Cursor.app"
+        case ClaudeRecipe().id:
+            path = "/Applications/Claude.app"
+        case ChatGPTRecipe().id:
+            path = "/Applications/ChatGPT.app"
         default:
             path = "/Applications/Grok Bot.app"
         }
@@ -127,19 +107,105 @@ public enum IconComposer {
         baseIcon(for: CursorRecipe().id)
     }
 
+    /// Build a PNG iconset from an existing image that already has transparency.
+    public static func writeICNS(from image: NSImage, to destination: URL, fileManager: FileManager = .default) throws {
+        let temp = fileManager.temporaryDirectory.appendingPathComponent("twocursors-icon-\(UUID().uuidString)", isDirectory: true)
+        let iconset = temp.appendingPathComponent("AppIcon.iconset", isDirectory: true)
+        try fileManager.createDirectory(at: iconset, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: temp) }
+
+        let sizes: [(Int, Int)] = [
+            (16, 1), (16, 2),
+            (32, 1), (32, 2),
+            (128, 1), (128, 2),
+            (256, 1), (256, 2),
+            (512, 1), (512, 2),
+        ]
+        for (baseSize, scale) in sizes {
+            let pixel = baseSize * scale
+            let name = scale == 1 ? "icon_\(baseSize)x\(baseSize).png" : "icon_\(baseSize)x\(baseSize)@2x.png"
+            guard let png = pngDataPreservingAlpha(image, pixels: pixel) else {
+                throw TwoCursorsError.iconFailed("Could not encode PNG at \(pixel)px.")
+            }
+            try png.write(to: iconset.appendingPathComponent(name))
+        }
+
+        try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
+        process.arguments = ["-c", "icns", iconset.path, "-o", destination.path]
+        let err = Pipe()
+        process.standardError = err
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let message = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            throw TwoCursorsError.iconFailed(message.isEmpty ? "iconutil failed" : message)
+        }
+    }
+
+    private static func drawTextBadge(_ badge: String, size: CGFloat) {
+        let fontSize = size * 0.14
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.white,
+        ]
+        let text = NSAttributedString(string: String(badge.prefix(8)).uppercased(), attributes: attributes)
+        let textSize = text.size()
+        let padding = size * 0.05
+        let badgeRect = NSRect(
+            x: (size - textSize.width) / 2 - padding,
+            y: size * 0.08,
+            width: textSize.width + padding * 2,
+            height: textSize.height + padding * 0.55
+        )
+        NSColor.black.withAlphaComponent(0.78).setFill()
+        NSBezierPath(roundedRect: badgeRect, xRadius: size * 0.04, yRadius: size * 0.04).fill()
+        let textOrigin = NSPoint(
+            x: badgeRect.midX - textSize.width / 2,
+            y: badgeRect.midY - textSize.height / 2
+        )
+        text.draw(at: textOrigin)
+    }
+
     private static func pngImage(_ data: Data?) -> NSImage? {
         guard let data, let image = NSImage(data: data) else { return nil }
         return image
     }
 
-    private static func resizedImage(_ image: NSImage, pixels: Int) -> NSImage {
-        let size = NSSize(width: pixels, height: pixels)
-        let out = NSImage(size: size)
-        out.lockFocus()
+    /// Resize with an explicit RGBA bitmap so Dock/Finder keep transparent corners.
+    private static func pngDataPreservingAlpha(_ image: NSImage, pixels: Int) -> Data? {
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixels,
+            pixelsHigh: pixels,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return nil }
+        rep.size = NSSize(width: pixels, height: pixels)
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
         NSGraphicsContext.current?.imageInterpolation = .high
-        image.draw(in: NSRect(origin: .zero, size: size), from: .zero, operation: .copy, fraction: 1)
-        out.unlockFocus()
-        return out
+        NSColor.clear.setFill()
+        NSRect(x: 0, y: 0, width: pixels, height: pixels).fill()
+        image.draw(
+            in: NSRect(x: 0, y: 0, width: pixels, height: pixels),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1,
+            respectFlipped: false,
+            hints: [.interpolation: NSImageInterpolation.high]
+        )
+        NSGraphicsContext.restoreGraphicsState()
+
+        return rep.representation(using: .png, properties: [:])
     }
 }
 

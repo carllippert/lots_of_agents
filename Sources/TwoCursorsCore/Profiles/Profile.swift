@@ -21,7 +21,7 @@ public enum IsolationMode: String, Codable, CaseIterable, Identifiable, Sendable
         case .userDataDir:
             return "Separate login, chats, settings, and extensions. Git, SSH, and your shell keep using your real home."
         case .fullHomeOverlay:
-            return "Same as above, plus a private ~/.cursor for skills and user rules. Your real home is fully symlinked in — not a Parall-style empty home."
+            return "Same as above, plus a private ~/.cursor for skills and user rules. Your real home is fully symlinked in."
         }
     }
 }
@@ -29,12 +29,31 @@ public enum IsolationMode: String, Codable, CaseIterable, Identifiable, Sendable
 public struct IconSpec: Codable, Equatable, Sendable {
     public var tintHex: String
     public var badge: String
+    public var showsBadge: Bool
     public var customImagePNG: Data?
 
-    public init(tintHex: String = "#5B8DEF", badge: String = "", customImagePNG: Data? = nil) {
+    public init(
+        tintHex: String = "#5B8DEF",
+        badge: String = "",
+        showsBadge: Bool? = nil,
+        customImagePNG: Data? = nil
+    ) {
         self.tintHex = tintHex
         self.badge = badge
+        self.showsBadge = showsBadge ?? !badge.isEmpty
         self.customImagePNG = customImagePNG
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case tintHex, badge, showsBadge, customImagePNG
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tintHex = try container.decodeIfPresent(String.self, forKey: .tintHex) ?? "#5B8DEF"
+        badge = try container.decodeIfPresent(String.self, forKey: .badge) ?? ""
+        customImagePNG = try container.decodeIfPresent(Data.self, forKey: .customImagePNG)
+        showsBadge = try container.decodeIfPresent(Bool.self, forKey: .showsBadge) ?? !badge.isEmpty
     }
 
     public static let palette: [String] = [

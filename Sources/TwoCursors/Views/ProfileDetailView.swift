@@ -8,6 +8,7 @@ struct ProfileDetailView: View {
     @State private var name: String = ""
     @State private var isolation: IsolationMode = .userDataDir
     @State private var installCLIShim = false
+    @State private var showingAdvanced = false
 
     var body: some View {
         ScrollView {
@@ -17,7 +18,7 @@ struct ProfileDetailView: View {
                 identity
                 isolationSection
                 paths
-                grokNote
+                advanced
             }
             .padding(24)
         }
@@ -40,8 +41,6 @@ struct ProfileDetailView: View {
                     .font(.largeTitle.weight(.semibold))
                     .textFieldStyle(.plain)
                     .onSubmit { commitIdentity() }
-                Text(model.liveIDs.contains(profile.id) ? "Running" : "Stopped")
-                    .foregroundStyle(model.liveIDs.contains(profile.id) ? .green : .secondary)
                 Text("Click the icon to edit it in place. No need to recreate the Dock app.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -52,15 +51,14 @@ struct ProfileDetailView: View {
 
     private var actions: some View {
         HStack {
-            Button("Launch") { model.launch(current) }
+            Button("Launch") { model.launch(profile) }
                 .buttonStyle(.borderedProminent)
-                .disabled(!appInstalled)
-            Button("Quit") { model.quit(current) }
-                .disabled(!model.liveIDs.contains(profile.id))
-            Button("Sign in…") { model.beginSignIn(current) }
-                .help("Pauses other \(appName) clones so \(urlScheme):// login reaches this one.")
+                .disabled(!appInstalled || isDirty)
+                .help(isDirty ? "Save your changes first." : "Launch this clone")
             Spacer()
             Button("Save") { commitIdentity() }
+                .buttonStyle(.borderedProminent)
+                .disabled(!isDirty)
             Button("Delete clone", role: .destructive) { model.deleteSelected() }
         }
     }
@@ -72,15 +70,6 @@ struct ProfileDetailView: View {
                     Text("~/Applications/\(profile.wrapperFileName)")
                         .textSelection(.enabled)
                 }
-                LabeledContent("Bundle ID") {
-                    Text(profile.wrapperBundleIdentifier)
-                        .textSelection(.enabled)
-                }
-                Toggle("Install CLI shim (\(profile.cliShimName))", isOn: $installCLIShim)
-                    .onChange(of: installCLIShim) { _, _ in commitIdentity() }
-                Text("The shim lives in ~/.local/bin and always launches this clone. The plain `\(profile.recipeID == "grok" ? "grok" : "cursor")` command still opens the default install.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             .padding(8)
         }
@@ -95,10 +84,14 @@ struct ProfileDetailView: View {
                     }
                 }
                 .pickerStyle(.radioGroup)
-                .onChange(of: isolation) { _, _ in commitIdentity() }
                 Text(isolation.subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if isDirty && isolation != profile.isolation {
+                    Text("Save to apply this mode. It takes effect the next time you launch.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
             .padding(8)
         }
@@ -109,7 +102,7 @@ struct ProfileDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 pathRow("User data", model.store.userDataURL(for: profile).path)
                 pathRow("Extensions", model.store.extensionsURL(for: profile).path)
-                if profile.isolation == .fullHomeOverlay {
+                if isolation == .fullHomeOverlay {
                     pathRow("Overlay HOME", model.store.overlayHomeURL(for: profile).path)
                 }
                 if profile.adoptsDefaultData {
@@ -122,30 +115,24 @@ struct ProfileDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private var grokNote: some View {
-        if profile.recipeID == "grok" {
-            GroupBox("Grok Bot") {
-                Text("Grok Bot has no account switcher. This clone launches the same /Applications/Grok Bot.app with a private data directory, so you can stay signed into a second Cursor-tier login. Sign-in mode pauses other Grok clones so sand:// reaches this one. Update from the official app — clones share that binary.")
-                    .font(.callout)
+    private var advanced: some View {
+        DisclosureGroup("Advanced", isExpanded: $showingAdvanced) {
+            VStack(alignment: .leading, spacing: 10) {
+                LabeledContent("Bundle ID") {
+                    Text(profile.wrapperBundleIdentifier)
+                        .textSelection(.enabled)
+                }
+                Toggle("Install CLI shim (\(profile.cliShimName))", isOn: $installCLIShim)
+                Text("Puts a launcher in ~/.local/bin for this clone only. The plain command for this app still opens the default install. Save to apply.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(8)
             }
+            .padding(.top, 8)
         }
     }
 
     private var appInstalled: Bool {
-        if profile.recipeID == "grok" { return model.grok.isInstalled }
-        if profile.recipeID == "cursor" { return model.cursor.isInstalled }
-        return false
-    }
-
-    private var appName: String {
-        RecipeRegistry.recipe(id: profile.recipeID)?.displayName ?? "app"
-    }
-
-    private var urlScheme: String {
-        RecipeRegistry.recipe(id: profile.recipeID)?.urlSchemes.first ?? "app"
+        model.status(for: profile.recipeID).isInstalled
     }
 
     private func pathRow(_ title: String, _ value: String) -> some View {
@@ -154,6 +141,12 @@ struct ProfileDetailView: View {
                 .textSelection(.enabled)
                 .font(.caption.monospaced())
         }
+    }
+
+    private var isDirty: Bool {
+        name != profile.name
+            || isolation != profile.isolation
+            || installCLIShim != profile.installCLIShim
     }
 
     private var current: Profile {
@@ -169,6 +162,7 @@ struct ProfileDetailView: View {
         name = profile.name
         isolation = profile.isolation
         installCLIShim = profile.installCLIShim
+        showingAdvanced = false
     }
 
     private func commitIdentity() {

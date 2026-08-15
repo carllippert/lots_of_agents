@@ -6,30 +6,37 @@ struct ProfileListView: View {
 
     var body: some View {
         List(selection: $model.selectedID) {
-            Section("Grok Bot clones") {
-                ForEach(model.profiles.filter { $0.recipeID == "grok" }) { profile in
-                    row(profile)
-                }
-            }
-            Section("Cursor clones") {
-                ForEach(model.profiles.filter { $0.recipeID == "cursor" }) { profile in
-                    row(profile)
+            ForEach(RecipeRegistry.all, id: \.id) { recipe in
+                let clones = model.profiles.filter { $0.recipeID == recipe.id }
+                if !clones.isEmpty {
+                    Section(recipe.displayName) {
+                        ForEach(clones) { profile in
+                            row(profile)
+                        }
+                    }
                 }
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Lots of Agents")
+        .navigationTitle("Clones")
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button {
+                model.openCreate()
+            } label: {
+                Label("New Clone", systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!model.anySupportedAppInstalled)
+            .padding(12)
+            .background(.bar)
+        }
     }
 
     private func row(_ profile: Profile) -> some View {
         HStack(spacing: 10) {
             ProfileIconView(spec: profile.icon, size: 28, recipeID: profile.recipeID)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(profile.name)
-                Text(model.liveIDs.contains(profile.id) ? "Running" : "Stopped")
-                    .font(.caption)
-                    .foregroundStyle(model.liveIDs.contains(profile.id) ? .green : .secondary)
-            }
+            Text(profile.name)
         }
         .tag(profile.id)
     }

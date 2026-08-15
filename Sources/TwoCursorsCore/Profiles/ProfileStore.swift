@@ -13,6 +13,9 @@ public final class ProfileStore {
         self.fileManager = fileManager
         self.root = root ?? TwoCursorsPaths.applicationSupport(fileManager: fileManager)
         self.catalogURL = self.root.appendingPathComponent("profiles.json")
+        if root == nil {
+            Self.migrateFromEnvironmentHomeIfNeeded(to: self.root, fileManager: fileManager)
+        }
         try fileManager.createDirectory(at: self.root, withIntermediateDirectories: true)
         if fileManager.fileExists(atPath: catalogURL.path) {
             let data = try Data(contentsOf: catalogURL)
@@ -99,8 +102,8 @@ public final class ProfileStore {
 
     public func userDataURL(for profile: Profile) -> URL {
         if profile.adoptsDefaultData {
-            return fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("Cursor", isDirectory: true)
+            return TwoCursorsPaths.accountHome(fileManager: fileManager)
+                .appendingPathComponent("Library/Application Support/Cursor", isDirectory: true)
         }
         return profileRoot(for: profile).appendingPathComponent("user-data", isDirectory: true)
     }
@@ -125,9 +128,55 @@ public final class ProfileStore {
         if profile.isolation == .fullHomeOverlay {
             try HomeOverlay.prepare(
                 overlayRoot: overlayHomeURL(for: profile),
-                realHome: fileManager.homeDirectoryForCurrentUser,
+                realHome: TwoCursorsPaths.accountHome(fileManager: fileManager),
                 fileManager: fileManager
             )
+        }
+    }
+
+    /// If an earlier launch ran inside a fake `$HOME` (Parall), pull that catalog into the real account home.
+    /// Runs when the real catalog is missing or empty but the environment-home catalog has clones.
+    private static func migrateFromEnvironmentHomeIfNeeded(to canonical: URL, fileManager: FileManager) {
+        let misplaced = fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/LotsOfAgents", isDirectory: true)
+        guard misplaced.standardizedFileURL != canonical.standardizedFileURL else { return }
+        let sourceCatalog = misplaced.appendingPathComponent("profiles.json")
+        guard fileManager.fileExists(atPath: sourceCatalog.path) else { return }
+
+        let destCatalog = canonical.appendingPathComponent("profiles.json")
+        let destNeedsImport: Bool = {
+            guard fileManager.fileExists(atPath: destCatalog.path),
+                  let data = try? Data(contentsOf: destCatalog),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let profiles = object["profiles"] as? [Any] else {
+                return true
+            }
+            return profiles.isEmpty
+        }()
+        guard destNeedsImport else { return }
+
+        let sourceHasProfiles: Bool = {
+            guard let data = try? Data(contentsOf: sourceCatalog),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let profiles = object["profiles"] as? [Any] else { return false }
+            return !profiles.isEmpty
+        }()
+        guard sourceHasProfiles else { return }
+
+        try? fileManager.createDirectory(at: canonical, withIntermediateDirectories: true)
+        try? fileManager.removeItem(at: destCatalog)
+        try? fileManager.copyItem(at: sourceCatalog, to: destCatalog)
+
+        let sourceProfiles = misplaced.appendingPathComponent("Profiles", isDirectory: true)
+        let destProfiles = canonical.appendingPathComponent("Profiles", isDirectory: true)
+        guard fileManager.fileExists(atPath: sourceProfiles.path) else { return }
+        try? fileManager.createDirectory(at: destProfiles, withIntermediateDirectories: true)
+        if let children = try? fileManager.contentsOfDirectory(at: sourceProfiles, includingPropertiesForKeys: nil) {
+            for child in children {
+                let dest = destProfiles.appendingPathComponent(child.lastPathComponent)
+                if fileManager.fileExists(atPath: dest.path) { try? fileManager.removeItem(at: dest) }
+                try? fileManager.copyItem(at: child, to: dest)
+            }
         }
     }
 }

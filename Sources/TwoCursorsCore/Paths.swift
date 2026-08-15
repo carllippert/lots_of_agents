@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum TwoCursorsPaths {
@@ -5,9 +6,21 @@ public enum TwoCursorsPaths {
     public static let wrapperBundlePrefix = "app.lotsofagents.clone"
     public static let productName = "Lots of Agents"
 
+    /// Login-account home from Directory Services, not `$HOME`.
+    /// Avoids storing data inside a Parall (or similar) fake home if this app was launched from one.
+    public static func accountHome(fileManager: FileManager = .default) -> URL {
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            let path = String(cString: dir)
+            if !path.isEmpty {
+                return URL(fileURLWithPath: path, isDirectory: true)
+            }
+        }
+        return fileManager.homeDirectoryForCurrentUser
+    }
+
     public static func applicationSupport(fileManager: FileManager = .default) -> URL {
-        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("LotsOfAgents", isDirectory: true)
+        accountHome(fileManager: fileManager)
+            .appendingPathComponent("Library/Application Support/LotsOfAgents", isDirectory: true)
     }
 
     public static func profilesJSON(fileManager: FileManager = .default) -> URL {
@@ -21,19 +34,19 @@ public enum TwoCursorsPaths {
     }
 
     public static func wrappersDirectory(fileManager: FileManager = .default) -> URL {
-        fileManager.homeDirectoryForCurrentUser
+        accountHome(fileManager: fileManager)
             .appendingPathComponent("Applications", isDirectory: true)
     }
 
     public static func cliBin(fileManager: FileManager = .default) -> URL {
-        fileManager.homeDirectoryForCurrentUser
+        accountHome(fileManager: fileManager)
             .appendingPathComponent(".local/bin", isDirectory: true)
     }
 
     public static func standardAppSearchRoots(fileManager: FileManager = .default) -> [URL] {
         [
             URL(fileURLWithPath: "/Applications", isDirectory: true),
-            fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true),
+            accountHome(fileManager: fileManager).appendingPathComponent("Applications", isDirectory: true),
         ]
     }
 }

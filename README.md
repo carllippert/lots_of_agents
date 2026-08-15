@@ -1,61 +1,78 @@
 # Lots of Agents
 
-Grok Bot has no account switcher. Lots of Agents launches the **same** `/Applications/Grok Bot.app` with a separate data directory so you can stay signed into work and personal Cursor-tier logins on one Mac.
+**Run multiple signed-in copies of your AI coding apps on one Mac.**
 
-One Grok Bot binary. Update once. Both clones pick it up. Also clones [Cursor](https://cursor.com).
+Grok Bot, Cursor, Claude, and ChatGPT (Codex) don’t give you a clean work/personal switcher. Lots of Agents launches the **same installed app** with a private data folder per clone — so Work and Personal stay signed in at the same time.
 
-Not affiliated with xAI or Anysphere.
+One binary. Update once. Every clone picks it up. No copying `.app` bundles.
 
-![Create Work and Personal Grok clones](docs/assets/two-grok-clones.png)
+Not affiliated with xAI, Anysphere, Anthropic, or OpenAI.
+
+<p align="center">
+  <img src="docs/assets/lots-of-agents-icon.png" width="128" alt="Lots of Agents icon" />
+</p>
+
+## Who it’s for
+
+You have two Cursor / Grok / Claude / ChatGPT logins (work + personal, client + side project) and you’re tired of signing out, using a second Mac user, or juggling browser profiles.
+
+## What you get
+
+- **Isolated logins & chats** — each clone has its own `--user-data-dir` / extensions dir
+- **Shared app updates** — still the official app in `/Applications`
+- **Dock wrappers** — `Grok Bot Work.app`, `Cursor Personal.app`, etc. in `~/Applications`
+- **Optional deeper isolation** — private `~/.cursor` (skills / user rules) via a full-home overlay that still symlinks your real home
+- **Tinted icons** — tell clones apart in the Dock without recreating them
+
+Supported today (if installed):
+
+| App | Bundle |
+|---|---|
+| [Grok Bot](https://cursor.com/bot/onboarding) | `com.anysphere.sand` |
+| [Cursor](https://cursor.com) | Cursor |
+| [Claude](https://claude.ai/download) | `com.anthropic.claudefordesktop` |
+| [ChatGPT](https://chatgpt.com/desktop) (Codex) | `com.openai.codex` |
 
 ## Requirements
 
 - macOS 14+
-- [Grok Bot](https://cursor.com/bot/onboarding) installed at `/Applications/Grok Bot.app` (bundle ID `com.anysphere.sand`)
-- Cursor is optional; clones work the same way if `/Applications/Cursor.app` is present
+- At least one of the apps above installed under `/Applications`
 
-## Download
+## Install (early build)
 
-**Strangers should only install a notarized DMG.** Gatekeeper rejects ad-hoc builds.
+This is an **ad-hoc signed** Mac app. Gatekeeper will warn the first time — that’s expected until a notarized DMG exists.
 
-| Artifact | Who |
-|---|---|
-| Notarized universal DMG (GitHub Releases v1.0) | Everyone |
-| Unsigned zip (`dist/Lots-of-Agents-unsigned.zip`) | Developers who will `xattr -dr com.apple.quarantine` themselves |
+1. Download the latest `.zip` from [Releases](../../releases) (or build from source below)
+2. Unzip and move **Lots of Agents.app** somewhere sensible (`~/Applications` is fine)
+3. First open: **right-click → Open** (or System Settings → Privacy & Security → Open Anyway)
+4. Create a Work and Personal clone for the app you care about → Launch
 
-This repo does **not** ship Grok Bot.app or Cursor.app.
+Optional quarantine clear if the zip came from a browser:
 
-## How clones work
-
-Each Grok clone launches the official binary:
-
-```text
-/Applications/Grok Bot.app/Contents/MacOS/Grok Bot \
-  --user-data-dir=<profile>/user-data \
-  --extensions-dir=<profile>/extensions
+```bash
+xattr -dr com.apple.quarantine ~/Applications/"Lots of Agents.app"
 ```
 
-| Isolated | Shared |
+This repo does **not** ship Grok Bot, Cursor, Claude, or ChatGPT — only the launcher.
+
+## How a clone works
+
+Same idea for every recipe — official binary, private data:
+
+```text
+/Applications/Grok\ Bot.app/Contents/MacOS/Grok\ Bot \
+  --user-data-dir=~/Library/Application\ Support/LotsOfAgents/Profiles/<id>/user-data \
+  --extensions-dir=…/extensions
+```
+
+| Isolated per clone | Shared |
 |---|---|
-| Cursor-tier login / plan | Grok Bot.app binary + updates |
-| Chats and settings | Git / SSH / your real home |
-| Optional private `~/.cursor` (full-home overlay) | Project files on disk |
+| Account / plan login | The real `.app` + its updates |
+| Chats, settings, extensions | Git, SSH, project files |
+| Optional private `~/.cursor` | Your real home (symlinked in overlay mode) |
 
-**Never** Parall’s incomplete fake home. The optional overlay symlinks *every* top-level item from your real home and only keeps `.cursor` as a real per-clone directory.
-
-OAuth uses `sand://`. Sign-in mode pauses other **Grok** clones so the callback reaches the one you are authorizing. Cursor clones use `cursor://` the same way and are paused separately.
-
-## App features
-
-- Detects Grok Bot by bundle ID `com.anysphere.sand` (display name is not enough)
-- Status banner: Grok Bot installed yes/no, running yes/no
-- Create Work / Personal clones with native icons (edit in place, no recreate)
-- Wrapper apps in `~/Applications` (`Grok Bot Work.app`, …)
-- One **Update Grok Bot** button that opens the official app
-- Cursor as a second recipe in the sidebar
-- Optional `~/.local/bin` shims
-
-Data lives in `~/Library/Application Support/LotsOfAgents/`.
+Data: `~/Library/Application Support/LotsOfAgents/`  
+Wrappers: `~/Applications/`
 
 ## Build from source
 
@@ -65,30 +82,18 @@ swift run TwoCursorsTests
 open "dist/Lots of Agents.app"
 ```
 
-`build-app.sh` produces a **universal** (arm64 + x86_64) app. By default it is ad-hoc signed (developers only).
-
-Developer-only zip (still unsigned / ad-hoc):
+Universal (arm64 + x86_64) by default. Developer zip:
 
 ```bash
 ./scripts/package-unsigned.sh
 ```
 
-## Notarize (required before Reddit)
+Notarized DMG (optional, when you have a Developer ID): see [docs/NOTARIZE.md](docs/NOTARIZE.md).
 
-Needs a Developer ID Application certificate and a notarytool keychain profile:
+## Privacy
 
-```bash
-./scripts/build-app.sh
-./scripts/notarize.sh
-./scripts/make-dmg.sh
-```
-
-See [docs/NOTARIZE.md](docs/NOTARIZE.md). Do not post a download link until the DMG is stapled and Gatekeeper accepts it.
-
-## Launch copy
-
-Draft posts (do not publish until the notarized DMG exists): [docs/LAUNCH.md](docs/LAUNCH.md)
+Runs only on your Mac. No analytics. See [PRIVACY.md](PRIVACY.md).
 
 ## License
 
-[MIT](LICENSE). [Privacy](PRIVACY.md).
+[MIT](LICENSE)
