@@ -12,20 +12,22 @@ Not affiliated with xAI, Anysphere, Anthropic, or OpenAI.
   <img src="docs/assets/lots-of-agents-icon.png" width="128" alt="Lots of Agents icon" />
 </p>
 
+**Download:** [Latest Release](https://github.com/carllippert/lots_of_agents/releases/latest) (`Lots-of-Agents-unsigned.zip`)
+
 ---
 
 ## Agent setup (copy this)
 
 If you are an AI agent installing this for a human on their Mac, follow **only** this section. Do not notarize. Do not open a PR. Do not invent alternate install paths.
 
+**Prefer the Release zip** (no Swift toolchain needed). Fall back to building from source only if the download fails.
+
 ### 0. Preconditions (fail fast)
 
-Run on the target Mac (macOS 14+). Confirm tools and at least one supported app:
+Run on the target Mac (macOS 14+). Confirm at least one supported app:
 
 ```bash
 sw_vers
-xcode-select -p
-swift --version
 ls -d \
   "/Applications/Grok Bot.app" \
   "/Applications/Cursor.app" \
@@ -33,26 +35,33 @@ ls -d \
   "/Applications/ChatGPT.app" 2>/dev/null
 ```
 
-| Check | If missing |
-|---|---|
-| `xcode-select -p` works | `xcode-select --install` (Command Line Tools are enough) |
-| `swift` works | Same — install CLT / Xcode |
-| At least one app under `/Applications` | Tell the human to install Grok Bot, Cursor, Claude, and/or ChatGPT first. This repo does **not** ship those apps. |
+If none of those apps exist, tell the human to install Grok Bot, Cursor, Claude, and/or ChatGPT first. This repo does **not** ship those apps.
 
-### 1. Clone and build the `.app`
+### 1a. Preferred — install from GitHub Release
 
 ```bash
+cd /tmp
+curl -sL "https://github.com/carllippert/lots_of_agents/releases/latest/download/Lots-of-Agents-unsigned.zip" -o Lots-of-Agents-unsigned.zip
+rm -rf "Lots of Agents.app"
+unzip -o Lots-of-Agents-unsigned.zip
+mkdir -p "$HOME/Applications"
+rm -rf "$HOME/Applications/Lots of Agents.app"
+mv "Lots of Agents.app" "$HOME/Applications/"
+xattr -dr com.apple.quarantine "$HOME/Applications/Lots of Agents.app" 2>/dev/null || true
+open "$HOME/Applications/Lots of Agents.app"
+```
+
+### 1b. Fallback — clone and build
+
+Needs Command Line Tools (`xcode-select --install`) and `swift`:
+
+```bash
+xcode-select -p
+swift --version
 git clone https://github.com/carllippert/lots_of_agents.git
 cd lots_of_agents
 swift run TwoCursorsTests
 ./scripts/build-app.sh
-```
-
-Success looks like: `dist/Lots of Agents.app` exists and tests print `All tests passed.`
-
-### 2. Install into `~/Applications`
-
-```bash
 mkdir -p "$HOME/Applications"
 rm -rf "$HOME/Applications/Lots of Agents.app"
 cp -R "dist/Lots of Agents.app" "$HOME/Applications/"
@@ -60,7 +69,7 @@ xattr -dr com.apple.quarantine "$HOME/Applications/Lots of Agents.app" 2>/dev/nu
 open "$HOME/Applications/Lots of Agents.app"
 ```
 
-### 3. What the human does in the UI (you cannot fully automate this)
+### 2. What the human does in the UI (you cannot fully automate this)
 
 1. In **Lots of Agents**, click **New Clone** (or an app icon on the landing screen).
 2. Pick an installed app (Grok Bot / Cursor / Claude / ChatGPT).
@@ -71,7 +80,7 @@ open "$HOME/Applications/Lots of Agents.app"
 
 Dock wrappers appear as e.g. `Grok Bot Work.app` in `~/Applications`.
 
-### 4. Verify
+### 3. Verify
 
 ```bash
 test -d "$HOME/Applications/Lots of Agents.app" && echo "app installed"
@@ -81,7 +90,7 @@ ls "$HOME/Applications" | grep -E 'Grok Bot|Cursor|Claude|ChatGPT' || true
 
 After they create a clone, `profiles.json` should list it and a wrapper `.app` should exist under `~/Applications`.
 
-### 5. Gatekeeper / “blocked” app
+### 4. Gatekeeper / “blocked” app
 
 Ad-hoc builds are normal. If macOS blocks launch:
 
@@ -140,14 +149,16 @@ Supported today (if installed under `/Applications`):
 
 ## Human install (no agent)
 
-Same as [Agent setup](#agent-setup-copy-this): clone → `./scripts/build-app.sh` → copy to `~/Applications` → Open.
-
-Optional developer zip (still Gatekeeper-blocked until quarantine cleared):
+1. Download [Lots-of-Agents-unsigned.zip](https://github.com/carllippert/lots_of_agents/releases/latest/download/Lots-of-Agents-unsigned.zip)
+2. Unzip → move **Lots of Agents.app** to `~/Applications`
+3. Clear quarantine (or right-click → Open):
 
 ```bash
-./scripts/package-unsigned.sh
-# → dist/Lots-of-Agents-unsigned.zip
+xattr -dr com.apple.quarantine ~/Applications/"Lots of Agents.app"
+open ~/Applications/"Lots of Agents.app"
 ```
+
+Or build from source: `./scripts/build-app.sh` → copy `dist/Lots of Agents.app`.
 
 Notarized DMG (optional, Apple Developer ID required): [docs/NOTARIZE.md](docs/NOTARIZE.md).
 
