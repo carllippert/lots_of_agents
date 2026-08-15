@@ -12,6 +12,94 @@ Not affiliated with xAI, Anysphere, Anthropic, or OpenAI.
   <img src="docs/assets/lots-of-agents-icon.png" width="128" alt="Lots of Agents icon" />
 </p>
 
+---
+
+## Agent setup (copy this)
+
+If you are an AI agent installing this for a human on their Mac, follow **only** this section. Do not notarize. Do not open a PR. Do not invent alternate install paths.
+
+### 0. Preconditions (fail fast)
+
+Run on the target Mac (macOS 14+). Confirm tools and at least one supported app:
+
+```bash
+sw_vers
+xcode-select -p
+swift --version
+ls -d \
+  "/Applications/Grok Bot.app" \
+  "/Applications/Cursor.app" \
+  "/Applications/Claude.app" \
+  "/Applications/ChatGPT.app" 2>/dev/null
+```
+
+| Check | If missing |
+|---|---|
+| `xcode-select -p` works | `xcode-select --install` (Command Line Tools are enough) |
+| `swift` works | Same — install CLT / Xcode |
+| At least one app under `/Applications` | Tell the human to install Grok Bot, Cursor, Claude, and/or ChatGPT first. This repo does **not** ship those apps. |
+
+### 1. Clone and build the `.app`
+
+```bash
+git clone https://github.com/carllippert/lots_of_agents.git
+cd lots_of_agents
+swift run TwoCursorsTests
+./scripts/build-app.sh
+```
+
+Success looks like: `dist/Lots of Agents.app` exists and tests print `All tests passed.`
+
+### 2. Install into `~/Applications`
+
+```bash
+mkdir -p "$HOME/Applications"
+rm -rf "$HOME/Applications/Lots of Agents.app"
+cp -R "dist/Lots of Agents.app" "$HOME/Applications/"
+xattr -dr com.apple.quarantine "$HOME/Applications/Lots of Agents.app" 2>/dev/null || true
+open "$HOME/Applications/Lots of Agents.app"
+```
+
+### 3. What the human does in the UI (you cannot fully automate this)
+
+1. In **Lots of Agents**, click **New Clone** (or an app icon on the landing screen).
+2. Pick an installed app (Grok Bot / Cursor / Claude / ChatGPT).
+3. Name it (e.g. `Work` or `Personal`) → create.
+4. Select the clone → **Launch**.
+5. Sign in inside that app window with the correct account.
+6. Repeat for a second clone if they want two logins.
+
+Dock wrappers appear as e.g. `Grok Bot Work.app` in `~/Applications`.
+
+### 4. Verify
+
+```bash
+test -d "$HOME/Applications/Lots of Agents.app" && echo "app installed"
+ls "$HOME/Library/Application Support/LotsOfAgents/profiles.json" 2>/dev/null && echo "catalog exists"
+ls "$HOME/Applications" | grep -E 'Grok Bot|Cursor|Claude|ChatGPT' || true
+```
+
+After they create a clone, `profiles.json` should list it and a wrapper `.app` should exist under `~/Applications`.
+
+### 5. Gatekeeper / “blocked” app
+
+Ad-hoc builds are normal. If macOS blocks launch:
+
+```bash
+xattr -dr com.apple.quarantine "$HOME/Applications/Lots of Agents.app"
+```
+
+Then: **right-click the app → Open → Open**, or System Settings → Privacy & Security → **Open Anyway**.
+
+### Do not
+
+- Do not require Apple Developer ID or notarization for a personal install
+- Do not copy Grok/Cursor/Claude/ChatGPT into this project
+- Do not store clones under a fake/sandbox `$HOME` (Parall, etc.) — the app writes to the real account home via `getpwuid`
+- Do not `sudo` anything for this install
+
+---
+
 ## Who it’s for
 
 You have two Cursor / Grok / Claude / ChatGPT logins (work + personal, client + side project) and you’re tired of signing out, using a second Mac user, or juggling browser profiles.
@@ -22,42 +110,18 @@ You have two Cursor / Grok / Claude / ChatGPT logins (work + personal, client + 
 - **Shared app updates** — still the official app in `/Applications`
 - **Dock wrappers** — `Grok Bot Work.app`, `Cursor Personal.app`, etc. in `~/Applications`
 - **Optional deeper isolation** — private `~/.cursor` (skills / user rules) via a full-home overlay that still symlinks your real home
-- **Tinted icons** — tell clones apart in the Dock without recreating them
+- **Tinted icons** — tell clones apart in the Dock
 
-Supported today (if installed):
+Supported today (if installed under `/Applications`):
 
-| App | Bundle |
+| App | Notes |
 |---|---|
-| [Grok Bot](https://cursor.com/bot/onboarding) | `com.anysphere.sand` |
-| [Cursor](https://cursor.com) | Cursor |
+| [Grok Bot](https://cursor.com/bot/onboarding) | Bundle ID `com.anysphere.sand` |
+| [Cursor](https://cursor.com) | Same clone model |
 | [Claude](https://claude.ai/download) | `com.anthropic.claudefordesktop` |
-| [ChatGPT](https://chatgpt.com/desktop) (Codex) | `com.openai.codex` |
-
-## Requirements
-
-- macOS 14+
-- At least one of the apps above installed under `/Applications`
-
-## Install (early build)
-
-This is an **ad-hoc signed** Mac app. Gatekeeper will warn the first time — that’s expected until a notarized DMG exists.
-
-1. Download the latest `.zip` from [Releases](../../releases) (or build from source below)
-2. Unzip and move **Lots of Agents.app** somewhere sensible (`~/Applications` is fine)
-3. First open: **right-click → Open** (or System Settings → Privacy & Security → Open Anyway)
-4. Create a Work and Personal clone for the app you care about → Launch
-
-Optional quarantine clear if the zip came from a browser:
-
-```bash
-xattr -dr com.apple.quarantine ~/Applications/"Lots of Agents.app"
-```
-
-This repo does **not** ship Grok Bot, Cursor, Claude, or ChatGPT — only the launcher.
+| [ChatGPT](https://chatgpt.com/desktop) (Codex) | `com.openai.codex` — app is named ChatGPT.app |
 
 ## How a clone works
-
-Same idea for every recipe — official binary, private data:
 
 ```text
 /Applications/Grok\ Bot.app/Contents/MacOS/Grok\ Bot \
@@ -71,24 +135,32 @@ Same idea for every recipe — official binary, private data:
 | Chats, settings, extensions | Git, SSH, project files |
 | Optional private `~/.cursor` | Your real home (symlinked in overlay mode) |
 
-Data: `~/Library/Application Support/LotsOfAgents/`  
-Wrappers: `~/Applications/`
+- Catalog / data: `~/Library/Application Support/LotsOfAgents/`
+- Wrappers: `~/Applications/`
 
-## Build from source
+## Human install (no agent)
 
-```bash
-swift run TwoCursorsTests
-./scripts/build-app.sh
-open "dist/Lots of Agents.app"
-```
+Same as [Agent setup](#agent-setup-copy-this): clone → `./scripts/build-app.sh` → copy to `~/Applications` → Open.
 
-Universal (arm64 + x86_64) by default. Developer zip:
+Optional developer zip (still Gatekeeper-blocked until quarantine cleared):
 
 ```bash
 ./scripts/package-unsigned.sh
+# → dist/Lots-of-Agents-unsigned.zip
 ```
 
-Notarized DMG (optional, when you have a Developer ID): see [docs/NOTARIZE.md](docs/NOTARIZE.md).
+Notarized DMG (optional, Apple Developer ID required): [docs/NOTARIZE.md](docs/NOTARIZE.md).
+
+## Uninstall
+
+```bash
+rm -rf "$HOME/Applications/Lots of Agents.app"
+# Optional: remove clones + wrappers you created
+# rm -rf "$HOME/Library/Application Support/LotsOfAgents"
+# rm -rf "$HOME/Applications/Grok Bot "*.app   # only Lots-of-Agents wrappers you no longer want
+```
+
+Removing Lots of Agents does **not** uninstall Grok/Cursor/Claude/ChatGPT.
 
 ## Privacy
 
