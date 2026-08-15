@@ -1,5 +1,9 @@
 # Lots of Agents
 
+<p align="center">
+  <img src="docs/assets/dock-clones.png" alt="Lots of Agents — multiple tinted clones in the Dock" width="720" />
+</p>
+
 **Run multiple signed-in copies of your AI coding apps on one Mac.**
 
 Grok Bot, Cursor, Claude, and ChatGPT (Codex) don’t give you a clean work/personal switcher. Lots of Agents launches the **same installed app** with a private data folder per clone — so Work and Personal stay signed in at the same time.
@@ -7,10 +11,6 @@ Grok Bot, Cursor, Claude, and ChatGPT (Codex) don’t give you a clean work/pers
 One binary. Update once. Every clone picks it up. No copying `.app` bundles.
 
 Not affiliated with xAI, Anysphere, Anthropic, or OpenAI.
-
-<p align="center">
-  <img src="docs/assets/dock-clones.png" alt="Lots of Agents — multiple tinted clones in the Dock" width="720" />
-</p>
 
 **Download:** [Latest Release](https://github.com/carllippert/lots_of_agents/releases/latest) (`Lots-of-Agents-unsigned.zip`)
 
