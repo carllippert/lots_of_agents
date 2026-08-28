@@ -147,6 +147,17 @@ Supported today (if installed under `/Applications`):
 - Catalog / data: `~/Library/Application Support/LotsOfAgents/`
 - Wrappers: `~/Applications/`
 
+### Wrapper identity & Cmd-Tab icons
+
+Each clone is a thin wrapper app (e.g. `~/Applications/Grok Bot Personal.app`) with:
+- Custom bundle ID (e.g. `app.lotsofagents.clone.grok.personal`)
+- Tinted icon from the catalog
+- A launcher binary that spawns the official app as a **child process** with custom args
+
+The wrapper process stays alive, preserving its Launch Services identity. This ensures the **Cmd-Tab switcher** shows your clone's custom icon and name, not the official app's generic icon. Multiple clones appear as separate apps.
+
+We do **not** copy the full Grok Bot.app bundle (that would break Electron helpers, file pickers, uploads, updates, and code signing). One official binary, many wrapper identities.
+
 ## Human install (no agent)
 
 1. Download [Lots-of-Agents-unsigned.zip](https://github.com/carllippert/lots_of_agents/releases/latest/download/Lots-of-Agents-unsigned.zip)

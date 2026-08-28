@@ -59,14 +59,55 @@ enum TwoCursorsLauncherMain {
             extensions: store.extensionsURL(for: profile)
         ) + Array(CommandLine.arguments.dropFirst())
 
-        exec(executable: executable.path, arguments: extra, environment: env)
+        spawnAndWait(executable: executable.path, arguments: extra, environment: env)
     }
 
-    static func exec(executable: String, arguments: [String], environment: [String: String]) -> Never {
+    /// Launch the official app binary as a child process and wait for it to complete.
+    ///
+    /// Unlike `execve`, this approach preserves the wrapper's Launch Services identity.
+    /// The wrapper stays alive (maintaining its CFBundleIdentifier, icon, and name in Cmd-Tab),
+    /// while the child process runs the actual Grok Bot / Cursor / Claude / ChatGPT binary.
+    ///
+    /// This ensures:
+    /// - The Cmd-Tab switcher shows the wrapper's custom icon and name (e.g. "Grok Bot Personal")
+    /// - Multiple clones appear as separate apps in the switcher
+    /// - The wrapper's bundle ID (e.g. app.lotsofagents.clone.grok.personal) is preserved
+    /// - All user-data-dir isolation and profile behavior continues to work
+    ///
+    /// We do NOT copy the full .app bundle (which would break helpers, file pickers, updates,
+    /// and code signing). We launch the one official binary with custom args/env.
+    static func spawnAndWait(executable: String, arguments: [String], environment: [String: String]) -> Never {
+        var pid: pid_t = 0
         let argv = ([executable] + arguments).map { strdup($0) } + [nil]
         let envp = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
-        execve(executable, argv, envp)
-        perror("execve")
-        exit(127)
+        
+        var attrs: posix_spawnattr_t?
+        posix_spawnattr_init(&attrs)
+        defer { 
+            if let attrs = attrs {
+                posix_spawnattr_destroy(&attrs)
+            }
+        }
+        
+        let status = posix_spawn(&pid, executable, nil, attrs, argv, envp)
+        
+        argv.forEach { free($0) }
+        envp.forEach { free($0) }
+        
+        guard status == 0 else {
+            FileHandle.standardError.write(Data("posix_spawn failed: \(String(cString: strerror(status)))\n".utf8))
+            exit(127)
+        }
+        
+        var childStatus: Int32 = 0
+        waitpid(pid, &childStatus, 0)
+        
+        if WIFEXITED(childStatus) {
+            exit(WEXITSTATUS(childStatus))
+        } else if WIFSIGNALED(childStatus) {
+            exit(128 + WTERMSIG(childStatus))
+        } else {
+            exit(1)
+        }
     }
 }
