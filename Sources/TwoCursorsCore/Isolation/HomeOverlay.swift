@@ -1,10 +1,14 @@
 import Foundation
 
 /// Full-home overlay: every top-level item in the real home is a symlink.
-/// Only `.cursor` is a real per-clone directory.
+/// A small set of app-specific folders are real, per-clone directories instead.
 /// This is the opposite of Parall's "minimal home" with a handful of links and empty folders.
 public enum HomeOverlay {
-    public static let isolatedName = ".cursor"
+    /// `.cursor` holds Cursor/Grok Bot skills & user rules.
+    /// `.codex` holds ChatGPT (Codex) session/auth/IPC state — ChatGPT stores its login here,
+    /// outside the Chromium `--user-data-dir`, so it must be private per clone or every clone
+    /// (and the real app) share one login and log each other out.
+    public static let isolatedNames: Set<String> = [".cursor", ".codex"]
 
     @discardableResult
     public static func prepare(
@@ -14,9 +18,11 @@ public enum HomeOverlay {
     ) throws -> URL {
         try fileManager.createDirectory(at: overlayRoot, withIntermediateDirectories: true)
 
-        let isolated = overlayRoot.appendingPathComponent(isolatedName, isDirectory: true)
-        if !fileManager.fileExists(atPath: isolated.path) {
-            try fileManager.createDirectory(at: isolated, withIntermediateDirectories: true)
+        for name in isolatedNames {
+            let isolated = overlayRoot.appendingPathComponent(name, isDirectory: true)
+            if !fileManager.fileExists(atPath: isolated.path) {
+                try fileManager.createDirectory(at: isolated, withIntermediateDirectories: true)
+            }
         }
 
         let items: [URL]
@@ -32,7 +38,7 @@ public enum HomeOverlay {
 
         for item in items {
             let name = item.lastPathComponent
-            if name == isolatedName { continue }
+            if isolatedNames.contains(name) { continue }
             let dest = overlayRoot.appendingPathComponent(name)
             if fileManager.fileExists(atPath: dest.path) { continue }
             do {
@@ -50,13 +56,15 @@ public enum HomeOverlay {
         realHome: URL,
         fileManager: FileManager = .default
     ) -> Bool {
-        let isolated = overlayRoot.appendingPathComponent(isolatedName)
-        var isDir: ObjCBool = false
-        guard fileManager.fileExists(atPath: isolated.path, isDirectory: &isDir), isDir.boolValue else {
-            return false
-        }
-        if let attrs = try? isolated.resourceValues(forKeys: [.isSymbolicLinkKey]), attrs.isSymbolicLink == true {
-            return false
+        for name in isolatedNames {
+            let isolated = overlayRoot.appendingPathComponent(name)
+            var isDir: ObjCBool = false
+            guard fileManager.fileExists(atPath: isolated.path, isDirectory: &isDir), isDir.boolValue else {
+                return false
+            }
+            if let attrs = try? isolated.resourceValues(forKeys: [.isSymbolicLinkKey]), attrs.isSymbolicLink == true {
+                return false
+            }
         }
         let required = [".ssh", ".gitconfig"]
         for name in required {

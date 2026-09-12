@@ -3,7 +3,8 @@ import Foundation
 public enum IsolationMode: String, Codable, CaseIterable, Identifiable, Sendable {
     /// `--user-data-dir` + `--extensions-dir` only. Real HOME. Git/ssh/shell stay yours.
     case userDataDir
-    /// Full-home overlay: every real-home top-level item is a symlink; only `.cursor` is a real per-clone directory.
+    /// Full-home overlay: every real-home top-level item is a symlink; a small set of
+    /// app-specific folders (`~/.cursor`, `~/.codex`) are real, private per-clone directories.
     /// Never Parall's incomplete fake home.
     case fullHomeOverlay
 
@@ -12,7 +13,7 @@ public enum IsolationMode: String, Codable, CaseIterable, Identifiable, Sendable
     public var title: String {
         switch self {
         case .userDataDir: return "Account & chats (recommended)"
-        case .fullHomeOverlay: return "Also isolate skills (~/.cursor)"
+        case .fullHomeOverlay: return "Full isolation (required for ChatGPT)"
         }
     }
 
@@ -21,8 +22,14 @@ public enum IsolationMode: String, Codable, CaseIterable, Identifiable, Sendable
         case .userDataDir:
             return "Separate login, chats, settings, and extensions. Git, SSH, and your shell keep using your real home."
         case .fullHomeOverlay:
-            return "Same as above, plus a private ~/.cursor for skills and user rules. Your real home is fully symlinked in."
+            return "Same as above, plus a private ~/.cursor and ~/.codex per clone. Needed for apps like ChatGPT that store login/session outside the profile dir — otherwise every clone shares one login. Your real home is fully symlinked in otherwise."
         }
+    }
+
+    /// ChatGPT (Codex) keeps its session/login in ~/.codex, outside `--user-data-dir` — clones
+    /// need a private ~/.codex or they all share (and log each other out of) one account.
+    public static func recommended(for recipeID: String) -> IsolationMode {
+        recipeID == ChatGPTRecipe().id ? .fullHomeOverlay : .userDataDir
     }
 }
 
@@ -101,9 +108,16 @@ public struct Profile: Identifiable, Codable, Equatable, Sendable {
         self.adoptsDefaultData = adoptsDefaultData
     }
 
+    /// The name you type is the whole Dock app name. We only prefix the app's display name
+    /// (e.g. "Grok Bot Personal.app") when you haven't already included it yourself — so
+    /// naming a clone "ChatGPT Work" gives you "ChatGPT Work.app", not "ChatGPT ChatGPT Work.app".
     public var wrapperFileName: String {
         let recipe = RecipeRegistry.recipe(id: recipeID)?.displayName ?? "App"
-        return "\(recipe) \(name).app"
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased().hasPrefix(recipe.lowercased()) {
+            return "\(trimmed).app"
+        }
+        return "\(recipe) \(trimmed).app"
     }
 
     public var wrapperBundleIdentifier: String {

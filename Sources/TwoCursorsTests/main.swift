@@ -21,6 +21,8 @@ enum TwoCursorsTests {
         detectFixtureClaude()
         detectFixtureChatGPT()
         storeRoundTrip()
+        chatGPTForcesFullIsolation()
+        wrapperNameDoesNotDoublePrefix()
         uniqueSlugs()
         seedMarketplace()
         seedGrokNoGallery()
@@ -132,6 +134,37 @@ enum TwoCursorsTests {
         }
     }
 
+    static func chatGPTForcesFullIsolation() {
+        do {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent("tc-forced-\(UUID().uuidString)")
+            let store = try ProfileStore(root: root)
+            let requestedUserDataDir = try store.create(name: "Work", recipeID: "chatgpt", isolation: .userDataDir)
+            check(requestedUserDataDir.isolation == .fullHomeOverlay, "create() forces full overlay for chatgpt")
+
+            // Simulate a pre-fix profile written to disk with the broken isolation mode.
+            var stale = requestedUserDataDir
+            stale.isolation = .userDataDir
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(ProfileCatalog(profiles: [stale]))
+            try data.write(to: root.appendingPathComponent("profiles.json"), options: .atomic)
+
+            let reloaded = try ProfileStore(root: root)
+            check(reloaded.profiles.first?.isolation == .fullHomeOverlay, "store self-heals stale userDataDir chatgpt profile on load")
+        } catch {
+            check(false, "chatGPTForcesFullIsolation \(error)")
+        }
+    }
+
+    static func wrapperNameDoesNotDoublePrefix() {
+        let alreadyPrefixed = Profile(name: "ChatGPT Work", recipeID: "chatgpt")
+        check(alreadyPrefixed.wrapperFileName == "ChatGPT Work.app", "does not double-prefix: \(alreadyPrefixed.wrapperFileName)")
+
+        let plain = Profile(name: "Personal", recipeID: "grok")
+        check(plain.wrapperFileName == "Grok Bot Personal.app", "still prefixes plain names: \(plain.wrapperFileName)")
+    }
+
     static func uniqueSlugs() {
         do {
             let root = FileManager.default.temporaryDirectory.appendingPathComponent("tc-slug-\(UUID().uuidString)")
@@ -192,11 +225,16 @@ enum TwoCursorsTests {
             try fm.createDirectory(at: real.appendingPathComponent(".ssh"), withIntermediateDirectories: true)
             try fm.createDirectory(at: real.appendingPathComponent(".cursor"), withIntermediateDirectories: true)
             try "global".write(to: real.appendingPathComponent(".cursor/mcp.json"), atomically: true, encoding: .utf8)
+            try fm.createDirectory(at: real.appendingPathComponent(".codex"), withIntermediateDirectories: true)
+            try "real-login".write(to: real.appendingPathComponent(".codex/auth.json"), atomically: true, encoding: .utf8)
             try HomeOverlay.prepare(overlayRoot: overlay, realHome: real)
             check(HomeOverlay.isFullOverlay(overlayRoot: overlay, realHome: real), "is full overlay")
             let cursor = overlay.appendingPathComponent(".cursor")
             check(!((try cursor.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink ?? false), ".cursor is real")
             check(!fm.fileExists(atPath: cursor.appendingPathComponent("mcp.json").path), "does not copy global mcp")
+            let codex = overlay.appendingPathComponent(".codex")
+            check(!((try codex.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink ?? false), ".codex is real")
+            check(!fm.fileExists(atPath: codex.appendingPathComponent("auth.json").path), "does not share real ChatGPT login")
             check(try String(contentsOf: overlay.appendingPathComponent(".gitconfig")) == "host=github.com", "gitconfig visible")
         } catch {
             check(false, "homeOverlay \(error)")

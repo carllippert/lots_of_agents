@@ -75,15 +75,23 @@ struct ProfileDetailView: View {
         }
     }
 
+    private var forcesFullHomeOverlay: Bool {
+        RecipeRegistry.recipe(id: profile.recipeID)?.forcesFullHomeOverlay == true
+    }
+
     private var isolationSection: some View {
         GroupBox("Isolation") {
             VStack(alignment: .leading, spacing: 10) {
-                Picker("Mode", selection: $isolation) {
-                    ForEach(IsolationMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                if forcesFullHomeOverlay {
+                    Text(IsolationMode.fullHomeOverlay.title)
+                } else {
+                    Picker("Mode", selection: $isolation) {
+                        ForEach(IsolationMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
                     }
+                    .pickerStyle(.radioGroup)
                 }
-                .pickerStyle(.radioGroup)
                 Text(isolation.subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)

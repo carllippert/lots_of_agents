@@ -65,6 +65,10 @@ public struct ChatGPTRecipe: AppRecipe {
     public let seedsMarketplace = false
     public let supportsUserDataDir = true
     public let downloadURL = URL(string: "https://chatgpt.com/desktop")!
+    /// ChatGPT keeps login/session/IPC state in ~/.codex, outside `--user-data-dir`.
+    /// `userDataDir`-only isolation does nothing for it — every clone shares one account
+    /// and logs the others out. Full home overlay is not optional here.
+    public let forcesFullHomeOverlay = true
 
     public init() {}
 }
@@ -77,6 +81,7 @@ public protocol AppRecipe {
     var executableName: String { get }
     var defaultUserDataFolderName: String { get }
     var urlSchemes: [String] { get }
+    var forcesFullHomeOverlay: Bool { get }
     var seedsMarketplace: Bool { get }
     var supportsUserDataDir: Bool { get }
     var downloadURL: URL { get }
@@ -86,6 +91,8 @@ public protocol AppRecipe {
 }
 
 public extension AppRecipe {
+    var forcesFullHomeOverlay: Bool { false }
+
     func detect(using detector: InstalledAppDetector) -> AppStatus {
         detector.detect(
             recipeID: id,

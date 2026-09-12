@@ -17,6 +17,7 @@ struct CreateProfileSheet: View {
 
     init(initialRecipeID: String = GrokRecipe().id) {
         _recipeID = State(initialValue: initialRecipeID)
+        _isolation = State(initialValue: IsolationMode.recommended(for: initialRecipeID))
     }
 
     var body: some View {
@@ -65,6 +66,9 @@ struct CreateProfileSheet: View {
         }
         .padding(24)
         .frame(width: 680)
+        .onChange(of: recipeID) { _, newValue in
+            isolation = IsolationMode.recommended(for: newValue)
+        }
     }
 
     private var appSelector: some View {
@@ -80,6 +84,10 @@ struct CreateProfileSheet: View {
         model.status(for: recipeID).isInstalled
     }
 
+    private var forcesFullHomeOverlay: Bool {
+        RecipeRegistry.recipe(id: recipeID)?.forcesFullHomeOverlay == true
+    }
+
     private var configureStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
@@ -90,9 +98,15 @@ struct CreateProfileSheet: View {
 
             Form {
                 TextField("Name", text: $name)
-                Picker("Isolation", selection: $isolation) {
-                    ForEach(IsolationMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                if forcesFullHomeOverlay {
+                    LabeledContent("Isolation") {
+                        Text(IsolationMode.fullHomeOverlay.title)
+                    }
+                } else {
+                    Picker("Isolation", selection: $isolation) {
+                        ForEach(IsolationMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
                     }
                 }
                 if recipeID == CursorRecipe().id, model.profiles.filter({ $0.recipeID == "cursor" }).isEmpty {

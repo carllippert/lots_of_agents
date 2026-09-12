@@ -27,6 +27,24 @@ public final class ProfileStore {
             self.profiles = []
             try persist()
         }
+        try normalizeForcedIsolation()
+    }
+
+    /// Some recipes (ChatGPT/Codex) keep login state outside `--user-data-dir` and require
+    /// full home isolation to actually separate accounts. Correct any profile that predates
+    /// this requirement, or was created before it was enforced, so it self-heals on load.
+    private func normalizeForcedIsolation() throws {
+        var changed = false
+        for index in profiles.indices {
+            guard let recipe = RecipeRegistry.recipe(id: profiles[index].recipeID),
+                  recipe.forcesFullHomeOverlay,
+                  profiles[index].isolation != .fullHomeOverlay else { continue }
+            profiles[index].isolation = .fullHomeOverlay
+            changed = true
+        }
+        if changed {
+            try persist()
+        }
     }
 
     public func profile(id: UUID) -> Profile? {
@@ -51,7 +69,7 @@ public final class ProfileStore {
             slug: slug,
             recipeID: recipeID,
             icon: icon,
-            isolation: isolation,
+            isolation: RecipeRegistry.recipe(id: recipeID)?.forcesFullHomeOverlay == true ? .fullHomeOverlay : isolation,
             installCLIShim: installCLIShim,
             adoptsDefaultData: adoptsDefaultData
         )
@@ -69,7 +87,11 @@ public final class ProfileStore {
         guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else {
             throw TwoCursorsError.profileNotFound(profile.id)
         }
-        profiles[index] = profile
+        var next = profile
+        if RecipeRegistry.recipe(id: next.recipeID)?.forcesFullHomeOverlay == true {
+            next.isolation = .fullHomeOverlay
+        }
+        profiles[index] = next
         try persist()
     }
 
