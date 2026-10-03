@@ -49,6 +49,10 @@ public struct ClaudeRecipe: AppRecipe {
     public let supportsUserDataDir = true
     public let downloadURL = URL(string: "https://claude.ai/download")!
 
+    /// Same Launch Services problem as ChatGPT: a spawned child is still com.anthropic.claudefordesktop,
+    /// so the claude:// sign-in handoff lands in the main Claude app instead of the clone.
+    public let clonesAppBundle = true
+
     public init() {}
 }
 

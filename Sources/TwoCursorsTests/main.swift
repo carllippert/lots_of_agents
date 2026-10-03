@@ -54,7 +54,11 @@ enum TwoCursorsTests {
 
     static func chatGPTClonesBundle() {
         check(ChatGPTRecipe().clonesAppBundle, "ChatGPT clones get their own app bundle")
+        check(ClaudeRecipe().clonesAppBundle, "Claude clones get their own app bundle")
         check(!GrokRecipe().clonesAppBundle, "Grok keeps the thin wrapper")
+        check(BundleCloner.isTeamBoundEntitlement("keychain-access-groups"), "drops keychain groups")
+        check(BundleCloner.isTeamBoundEntitlement("com.apple.developer.team-identifier"), "drops team ID")
+        check(!BundleCloner.isTeamBoundEntitlement("com.apple.security.virtualization"), "keeps virtualization")
         let source: [String: Any] = [
             "CFBundleIdentifier": "com.openai.codex",
             "CFBundleExecutable": "ChatGPT",
@@ -76,9 +80,19 @@ enum TwoCursorsTests {
         check(plist[BundleCloner.realExecutableKey] as? String == "ChatGPT", "remembers real executable")
         check(plist["CFBundleIconName"] == nil, "asset-catalog icon removed so AppIcon.icns wins")
         check(plist["CFBundleIconFile"] as? String == "AppIcon", "clone icon file")
-        check(plist["CFBundleURLTypes"] == nil, "clone does not claim codex:// links")
+        check(plist["CFBundleURLTypes"] != nil, "clone keeps URL schemes for the sign-in handoff")
         check(plist["SUEnableAutomaticChecks"] as? Bool == false, "clone does not self-update")
         check(plist["TwoCursorsProfileID"] as? String == "x", "extra keys merged")
+
+        let electron = BundleCloner.cloneInfoPlist(
+            source: ["CFBundleName": "Claude", "CFBundleExecutable": "Claude"],
+            bundleIdentifier: "app.lotsofagents.clone.claude.personal",
+            displayName: "Claude Personal",
+            keepsBundleName: true,
+            extra: [:]
+        )
+        check(electron["CFBundleName"] as? String == "Claude", "Electron helper lookup keeps CFBundleName")
+        check(electron["CFBundleDisplayName"] as? String == "Claude Personal", "display name still changes")
 
         let profile = Profile(name: "Work", slug: "work", recipeID: "chatgpt")
         check(profile.wrapperDisplayName == "ChatGPT Work", "display name: \(profile.wrapperDisplayName)")

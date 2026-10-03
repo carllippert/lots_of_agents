@@ -58,19 +58,23 @@ public struct BundleCloner {
         source: [String: Any],
         bundleIdentifier: String,
         displayName: String,
+        keepsBundleName: Bool = false,
         extra: [String: Any]
     ) -> [String: Any] {
         var plist = source
         let realExecutable = source["CFBundleExecutable"] as? String ?? ""
         plist["CFBundleIdentifier"] = bundleIdentifier
-        plist["CFBundleName"] = displayName
+        // Stock Electron finds "<CFBundleName> Helper.app" by name, so those apps keep it.
+        if !keepsBundleName {
+            plist["CFBundleName"] = displayName
+        }
         plist["CFBundleDisplayName"] = displayName
         plist["CFBundleExecutable"] = "TwoCursorsLauncher"
         plist["CFBundleIconFile"] = "AppIcon"
         // CFBundleIconName points at the official Assets.car icon and wins over CFBundleIconFile.
         plist.removeValue(forKey: "CFBundleIconName")
-        // Leave codex:// links to the official app; clones would otherwise race for them.
-        plist.removeValue(forKey: "CFBundleURLTypes")
+        // CFBundleURLTypes stays: browser sign-in hands back through claude:// / codex://, and the
+        // launcher makes the clone the default handler for those schemes while it is open.
         plist["SUEnableAutomaticChecks"] = false
         plist["SUAutomaticallyUpdate"] = false
         plist["SUAllowsAutomaticUpdates"] = false
@@ -109,10 +113,13 @@ public struct BundleCloner {
         var extra = extraInfo
         extra[Self.sourceAppKey] = source.path
         extra[Self.sourceVersionKey] = Self.versionStamp(of: source) ?? ""
+        let bundleName = sourceInfo["CFBundleName"] as? String ?? ""
+        let helper = contents.appendingPathComponent("Frameworks/\(bundleName) Helper.app")
         let plist = Self.cloneInfoPlist(
             source: sourceInfo,
             bundleIdentifier: bundleIdentifier,
             displayName: displayName,
+            keepsBundleName: fileManager.fileExists(atPath: helper.path),
             extra: extra
         )
         let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
@@ -120,11 +127,16 @@ public struct BundleCloner {
 
         try writeIcon(contents.appendingPathComponent("Resources/AppIcon.icns"))
 
-        // Sparkle replaces the host bundle in place; in a clone that would install the stock app
-        // over the clone. Strip the installer pieces from the clone only (source stays intact).
-        let sparkle = contents.appendingPathComponent("Frameworks/Sparkle.framework/Versions/Current")
-        for name in ["Autoupdate", "Updater.app", "XPCServices/Installer.xpc"] {
-            try? fileManager.removeItem(at: sparkle.appendingPathComponent(name))
+        // Sparkle (ChatGPT) and Squirrel (Claude) replace the host bundle in place; in a clone that
+        // would install the stock app over the clone. Strip the installers from the clone only.
+        let frameworks = contents.appendingPathComponent("Frameworks")
+        for relative in [
+            "Sparkle.framework/Versions/Current/Autoupdate",
+            "Sparkle.framework/Versions/Current/Updater.app",
+            "Sparkle.framework/Versions/Current/XPCServices/Installer.xpc",
+            "Squirrel.framework/Versions/Current/Resources/ShipIt",
+        ] {
+            try? fileManager.removeItem(at: frameworks.appendingPathComponent(relative))
         }
 
         let launcherDest = macos.appendingPathComponent("TwoCursorsLauncher")
@@ -135,13 +147,51 @@ public struct BundleCloner {
         // The official signature seals Info.plist, so the edited copy will not launch under it.
         // Ad-hoc re-sign the main executable without hardened runtime (no library validation, so
         // the untouched, officially signed frameworks still load).
-        try run("/usr/bin/codesign", ["--force", "--sign", "-", macos.appendingPathComponent(realExecutable).path])
-        try run("/usr/bin/codesign", ["--force", "--sign", "-", launcherDest.path])
+        try adHocSignKeepingEntitlements(macos.appendingPathComponent(realExecutable))
+        // The launcher keeps its linker ad-hoc signature byte-for-byte, so its launcher stamp still
+        // matches when a clone rebuilds itself from its own copy.
 
         if fileManager.fileExists(atPath: dest.path) {
             try fileManager.removeItem(at: dest)
         }
         try fileManager.moveItem(at: staging, to: dest)
+    }
+
+    /// Entitlements an ad-hoc signature may not carry (AMFI kills the process) — they are tied to
+    /// the vendor's team ID / provisioning profile.
+    public static func isTeamBoundEntitlement(_ key: String) -> Bool {
+        key == "keychain-access-groups"
+            || key == "com.apple.application-identifier"
+            || key == "com.apple.security.application-groups"
+            || key.hasPrefix("com.apple.developer.")
+    }
+
+    /// Keeps entitlements that still matter without hardened runtime (e.g. Claude's
+    /// `com.apple.security.virtualization`) and drops the team-bound ones.
+    private func adHocSignKeepingEntitlements(_ executable: URL) throws {
+        var arguments = ["--force", "--sign", "-"]
+        let dump = Process()
+        dump.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        dump.arguments = ["-d", "--entitlements", "-", "--xml", executable.path]
+        let out = Pipe()
+        dump.standardOutput = out
+        dump.standardError = Pipe()
+        try dump.run()
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        dump.waitUntilExit()
+
+        var entitlementsFile: URL?
+        if let entitlements = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
+            let kept = entitlements.filter { !Self.isTeamBoundEntitlement($0.key) }
+            if !kept.isEmpty {
+                let file = fileManager.temporaryDirectory.appendingPathComponent("lots-of-agents-\(UUID().uuidString).plist")
+                try PropertyListSerialization.data(fromPropertyList: kept, format: .xml, options: 0).write(to: file)
+                entitlementsFile = file
+                arguments += ["--entitlements", file.path]
+            }
+        }
+        defer { entitlementsFile.map { try? fileManager.removeItem(at: $0) } }
+        try run("/usr/bin/codesign", arguments + [executable.path])
     }
 
     private func run(_ tool: String, _ arguments: [String]) throws {

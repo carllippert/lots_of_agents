@@ -44,6 +44,7 @@ final class AppModel: ObservableObject {
             self.errorMessage = error.localizedDescription
         }
         refreshLive()
+        DispatchQueue.main.async { [weak self] in self?.refreshStaleWrappers() }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refresh()
@@ -221,6 +222,19 @@ final class AppModel: ObservableObject {
         }
         let image = IconComposer.image(from: profile.icon, base: IconComposer.baseIcon(for: profile.recipeID))
         _ = try wrappers.install(profile: profile, store: store, launcherBinary: binary, iconImage: image)
+    }
+
+    /// Rebuild wrappers made by an older Lots of Agents so they pick up launcher fixes
+    /// (running clones are skipped by the builder and refresh on a later start).
+    private func refreshStaleWrappers() {
+        guard let binary = WrapperAppBuilder.locateLauncherBinary() else { return }
+        for profile in profiles where wrappers.needsRefresh(profile: profile, launcherBinary: binary) {
+            do {
+                try installSupport(for: profile)
+            } catch {
+                NSLog("Lots of Agents: refreshing \(profile.wrapperFileName) failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func reapplyIconsIfNeeded() {

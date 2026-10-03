@@ -99,6 +99,15 @@ enum TwoCursorsLauncherMain {
             extensions: store.extensionsURL(for: profile)
         ) + ["--use-mock-keychain"] + Array(CommandLine.arguments.dropFirst())
 
+        // Browser sign-in hands back through claude:// / codex://. Make this clone the handler while
+        // it is the one being opened, so the login lands here instead of in the official app.
+        // (Claude re-claims the scheme itself on launch, so the last-opened copy wins either way.)
+        if let bundleID = info["CFBundleIdentifier"] as? String {
+            for scheme in recipe.urlSchemes {
+                LSSetDefaultHandlerForURLScheme(scheme as CFString, bundleID as CFString)
+            }
+        }
+
         var argv = ([executable] + arguments).map { strdup($0) } + [nil]
         var envp = env.map { strdup("\($0.key)=\($0.value)") } + [nil]
         execve(executable, &argv, &envp)

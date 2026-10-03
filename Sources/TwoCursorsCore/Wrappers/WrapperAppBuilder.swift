@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Foundation
 
 public struct WrapperAppBuilder {
@@ -38,6 +39,29 @@ public struct WrapperAppBuilder {
         iconImage: NSImage?
     ) throws {
         try writeBundle(profile: profile, store: store, at: dest, launcherBinary: launcherBinary, iconImage: iconImage)
+    }
+
+    public static let launcherStampKey = "TwoCursorsLauncherStamp"
+
+    /// Hash of the launcher binary a wrapper was built from, so an updated Lots of Agents can
+    /// tell which wrappers still carry an old launcher.
+    public static func launcherStamp(_ launcherBinary: URL) -> String {
+        guard let data = try? Data(contentsOf: launcherBinary) else { return "" }
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// True when the wrapper exists but was built by an older launcher, or is an old-style thin
+    /// wrapper for a recipe that now clones the app bundle.
+    public func needsRefresh(profile: Profile, launcherBinary: URL) -> Bool {
+        let url = wrapperURL(for: profile)
+        guard let info = NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist")) else {
+            return false
+        }
+        if RecipeRegistry.recipe(id: profile.recipeID)?.clonesAppBundle == true,
+           info[BundleCloner.realExecutableKey] == nil {
+            return true
+        }
+        return info[Self.launcherStampKey] as? String != Self.launcherStamp(launcherBinary)
     }
 
     public func remove(profile: Profile) throws {
@@ -108,6 +132,7 @@ public struct WrapperAppBuilder {
             "TwoCursorsProfileID": profile.id.uuidString,
             "TwoCursorsRecipeID": profile.recipeID,
             "TwoCursorsCatalog": store.catalogURL.path,
+            Self.launcherStampKey: Self.launcherStamp(launcherBinary),
         ]
         let plistURL = contents.appendingPathComponent("Info.plist")
         let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
@@ -149,6 +174,7 @@ public struct WrapperAppBuilder {
                 "TwoCursorsProfileID": profile.id.uuidString,
                 "TwoCursorsRecipeID": profile.recipeID,
                 "TwoCursorsCatalog": store.catalogURL.path,
+                Self.launcherStampKey: Self.launcherStamp(launcherBinary),
             ]
         )
         IconComposer.removeCustomIconOverride(from: dest, fileManager: fileManager)
