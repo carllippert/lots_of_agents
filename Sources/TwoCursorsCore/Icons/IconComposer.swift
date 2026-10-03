@@ -84,23 +84,100 @@ public enum IconComposer {
         NSWorkspace.shared.setIcon(image, forFile: fileURL.path, options: [])
     }
 
-    public static func baseIcon(for recipeID: String) -> NSImage? {
-        let path: String
+    /// `NSWorkspace.setIcon` writes an `Icon\r` resource-fork override. A stub
+    /// override (a few hundred bytes) beats `AppIcon.icns` and shows a folder.
+    public static func removeCustomIconOverride(from appURL: URL, fileManager: FileManager = .default) {
+        let iconFile = appURL.appendingPathComponent("Icon\r")
+        if fileManager.fileExists(atPath: iconFile.path) {
+            try? fileManager.removeItem(at: iconFile)
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+        process.arguments = ["-d", "com.apple.FinderInfo", appURL.path]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try? process.run()
+        process.waitUntilExit()
+    }
+
+    public static func officialAppURL(for recipeID: String) -> URL {
         switch recipeID {
         case GrokRecipe().id:
-            path = "/Applications/Grok Bot.app"
+            return URL(fileURLWithPath: "/Applications/Grok Bot.app")
         case CursorRecipe().id:
-            path = "/Applications/Cursor.app"
+            return URL(fileURLWithPath: "/Applications/Cursor.app")
         case ClaudeRecipe().id:
-            path = "/Applications/Claude.app"
+            return URL(fileURLWithPath: "/Applications/Claude.app")
         case ChatGPTRecipe().id:
-            path = "/Applications/ChatGPT.app"
+            return URL(fileURLWithPath: "/Applications/ChatGPT.app")
         default:
-            path = "/Applications/Grok Bot.app"
+            return URL(fileURLWithPath: "/Applications/Grok Bot.app")
         }
-        let app = URL(fileURLWithPath: path)
+    }
+
+    public static func baseIcon(for recipeID: String) -> NSImage? {
+        let app = officialAppURL(for: recipeID)
         guard FileManager.default.fileExists(atPath: app.path) else { return nil }
+        if let raster = rasterizedAppIcon(from: app) {
+            return raster
+        }
         return NSWorkspace.shared.icon(forFile: app.path)
+    }
+
+    /// Load the official icon from the bundle itself. `NSWorkspace.icon(forFile:)`
+    /// on a modern `ic13` app (Grok Bot) returns a generic folder tile.
+    public static func rasterizedAppIcon(from appURL: URL, fileManager: FileManager = .default) -> NSImage? {
+        let resources = appURL.appendingPathComponent("Contents/Resources")
+        let plist = NSDictionary(contentsOf: appURL.appendingPathComponent("Contents/Info.plist")) as? [String: Any]
+        var candidates: [URL] = []
+
+        let preferredPNG = ["icon-chatgpt.png", "icon.png", "app.png", "Icon.png"]
+        for name in preferredPNG {
+            candidates.append(resources.appendingPathComponent(name))
+        }
+        if let listed = plist?["CFBundleIconFile"] as? String {
+            let file = listed.hasSuffix(".icns") || listed.hasSuffix(".png") ? listed : "\(listed).icns"
+            candidates.append(resources.appendingPathComponent(file))
+        }
+        candidates.append(contentsOf: [
+            resources.appendingPathComponent("icon-chatgpt.icns"),
+            resources.appendingPathComponent("icon.icns"),
+            resources.appendingPathComponent("Icon.icns"),
+            resources.appendingPathComponent("electron.icns"),
+            resources.appendingPathComponent("Cursor.icns"),
+            resources.appendingPathComponent("app.icns"),
+        ])
+
+        if let children = try? fileManager.contentsOfDirectory(at: resources, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) {
+            let extras = children.filter { url in
+                let name = url.lastPathComponent.lowercased()
+                return name.hasSuffix(".png") && (name.contains("icon") || name.contains("app"))
+            }.sorted { lhs, rhs in
+                let l = (try? lhs.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                let r = (try? rhs.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                return l > r
+            }
+            candidates.append(contentsOf: extras)
+        }
+
+        var seen = Set<String>()
+        for url in candidates {
+            let path = url.standardizedFileURL.path
+            guard seen.insert(path).inserted, fileManager.fileExists(atPath: path) else { continue }
+            if url.pathExtension.lowercased() == "png", let image = NSImage(contentsOf: url), isUsableIcon(image) {
+                return image
+            }
+            if let image = rasterizeICNS(url) {
+                return image
+            }
+        }
+        return nil
+    }
+
+    public static func isUsableIcon(_ image: NSImage) -> Bool {
+        let maxPixels = image.representations.map { max($0.pixelsWide, $0.pixelsHigh) }.max() ?? 0
+        if maxPixels >= 64 { return true }
+        return image.size.width >= 64 && image.size.height >= 64
     }
 
     public static func cursorBaseIcon() -> NSImage? {
@@ -167,6 +244,47 @@ public enum IconComposer {
             y: badgeRect.midY - textSize.height / 2
         )
         text.draw(at: textOrigin)
+    }
+
+    private static func rasterizeICNS(_ url: URL, fileManager: FileManager = .default) -> NSImage? {
+        if let image = NSImage(contentsOf: url), isUsableIcon(image) {
+            return image
+        }
+        let temp = fileManager.temporaryDirectory.appendingPathComponent("twocursors-raster-\(UUID().uuidString)", isDirectory: true)
+        try? fileManager.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: temp) }
+
+        let iconset = temp.appendingPathComponent("out.iconset", isDirectory: true)
+        let iconutil = Process()
+        iconutil.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
+        iconutil.arguments = ["-c", "iconset", url.path, "-o", iconset.path]
+        iconutil.standardOutput = Pipe()
+        iconutil.standardError = Pipe()
+        try? iconutil.run()
+        iconutil.waitUntilExit()
+        if iconutil.terminationStatus == 0,
+           let files = try? fileManager.contentsOfDirectory(at: iconset, includingPropertiesForKeys: [.fileSizeKey], options: []),
+           let best = files.max(by: { lhs, rhs in
+               ((try? lhs.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+                   < ((try? rhs.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+           }),
+           let image = NSImage(contentsOf: best),
+           isUsableIcon(image) {
+            return image
+        }
+
+        let png = temp.appendingPathComponent("icon.png")
+        let sips = Process()
+        sips.executableURL = URL(fileURLWithPath: "/usr/bin/sips")
+        sips.arguments = ["-z", "1024", "1024", "-s", "format", "png", url.path, "--out", png.path]
+        sips.standardOutput = Pipe()
+        sips.standardError = Pipe()
+        try? sips.run()
+        sips.waitUntilExit()
+        if sips.terminationStatus == 0, let image = NSImage(contentsOf: png), isUsableIcon(image) {
+            return image
+        }
+        return nil
     }
 
     private static func pngImage(_ data: Data?) -> NSImage? {

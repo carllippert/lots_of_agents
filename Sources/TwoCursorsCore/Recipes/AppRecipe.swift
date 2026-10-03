@@ -11,6 +11,7 @@ public struct GrokRecipe: AppRecipe {
     public let defaultUserDataFolderName = "Grok Bot"
     public let urlSchemes = ["sand"]
     public let seedsMarketplace = false
+    public let seedsUpdateDisabled = true
     public let supportsUserDataDir = true
     public let downloadURL = URL(string: "https://cursor.com/bot/onboarding")!
 
@@ -69,6 +70,10 @@ public struct ChatGPTRecipe: AppRecipe {
     /// `userDataDir`-only isolation does nothing for it — every clone shares one account
     /// and logs the others out. Full home overlay is not optional here.
     public let forcesFullHomeOverlay = true
+    /// Codex registers with Launch Services under its own bundle ID even when spawned by a
+    /// wrapper, so Spotlight/Dock/Cmd-Tab all resolve to whichever copy is running. Clones get
+    /// their own APFS-cloned bundle with a distinct bundle ID, name, and icon instead.
+    public let clonesAppBundle = true
 
     public init() {}
 }
@@ -83,6 +88,8 @@ public protocol AppRecipe {
     var urlSchemes: [String] { get }
     var forcesFullHomeOverlay: Bool { get }
     var seedsMarketplace: Bool { get }
+    var seedsUpdateDisabled: Bool { get }
+    var clonesAppBundle: Bool { get }
     var supportsUserDataDir: Bool { get }
     var downloadURL: URL { get }
 
@@ -92,6 +99,8 @@ public protocol AppRecipe {
 
 public extension AppRecipe {
     var forcesFullHomeOverlay: Bool { false }
+    var seedsUpdateDisabled: Bool { false }
+    var clonesAppBundle: Bool { false }
 
     func detect(using detector: InstalledAppDetector) -> AppStatus {
         detector.detect(

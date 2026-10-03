@@ -4,6 +4,25 @@
 
 Each Lots of Agents clone is a thin wrapper app that launches the official Grok Bot / Cursor / Claude / ChatGPT binary while preserving its own identity in macOS Launch Services and the Cmd-Tab switcher.
 
+## ChatGPT / Codex: cloned bundles
+
+The thin wrapper below does **not** work for ChatGPT (Codex). The spawned child still
+registers with Launch Services as `com.openai.codex`, so Spotlight / Dock / Cmd-Tab treat every
+running copy as "ChatGPT": opening the official app just focuses whichever clone is running,
+and the clone's window shows the stock icon.
+
+Recipes with `clonesAppBundle = true` (ChatGPT) instead get a real per-clone app built by
+`BundleCloner`:
+
+- `cp -c -R` APFS clone of `/Applications/ChatGPT.app` (near-zero disk cost)
+- Info.plist rewritten: clone bundle ID, name, `AppIcon.icns`; `CFBundleExecutable` = `TwoCursorsLauncher`
+- Real `ChatGPT` binary ad-hoc re-signed (the official seal covers Info.plist); frameworks untouched
+- Launcher sets up the home overlay and **execve**'s the bundle's own binary with
+  `--use-mock-keychain` — one process, one app, the clone's name and icon everywhere
+- Updates: Sparkle is disabled in the clone and its installer removed (it would install the stock
+  app over the clone). `/Applications/ChatGPT.app` updates itself; the launcher rebuilds the clone
+  whenever the source version changes. Old-style ChatGPT wrappers convert on first launch.
+
 ## Structure
 
 ```

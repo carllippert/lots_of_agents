@@ -16,19 +16,24 @@ public struct CLIShimInstaller {
         let shim = bin.appendingPathComponent(profile.cliShimName)
         let userData = store.userDataURL(for: profile).path
         let extensions = store.extensionsURL(for: profile).path
-        var script = """
-        #!/bin/sh
-        exec "\(executable.path)" --user-data-dir="\(userData)" --extensions-dir="\(extensions)" "$@"
-        """
+        var exports: [String] = []
         if profile.isolation == .fullHomeOverlay {
             let home = store.overlayHomeURL(for: profile).path
-            script = """
-            #!/bin/sh
-            export HOME="\(home)"
-            export CURSOR_DATA_DIR="\(home)/.cursor"
-            exec "\(executable.path)" --user-data-dir="\(userData)" --extensions-dir="\(extensions)" "$@"
-            """
+            exports.append("export HOME=\"\(home)\"")
+            exports.append("export CURSOR_DATA_DIR=\"\(home)/.cursor\"")
         }
+        if recipe.id == ChatGPTRecipe().id {
+            let home = profile.isolation == .fullHomeOverlay
+                ? store.overlayHomeURL(for: profile).path
+                : TwoCursorsPaths.accountHome(fileManager: fileManager).path
+            exports.append("export CODEX_HOME=\"\(home)/.codex\"")
+            exports.append("export CODEX_ELECTRON_USER_DATA_PATH=\"\(userData)\"")
+        }
+        let exportBlock = exports.isEmpty ? "" : exports.joined(separator: "\n") + "\n"
+        let script = """
+        #!/bin/sh
+        \(exportBlock)exec "\(executable.path)" --user-data-dir="\(userData)" --extensions-dir="\(extensions)" "$@"
+        """
         try script.write(to: shim, atomically: true, encoding: .utf8)
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shim.path)
         return shim

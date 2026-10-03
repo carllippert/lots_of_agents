@@ -26,24 +26,14 @@ public struct ProfileLauncher {
         }
 
         try store.prepareDirectories(for: profile)
-        if recipe.seedsMarketplace {
-            try ProfileSeeder.seedUserData(
-                at: store.userDataURL(for: profile),
-                icon: profile.icon,
-                fileManager: fileManager
-            )
-        } else if recipe.supportsUserDataDir {
-            try ProfileSeeder.seedUpdateDisabled(
-                at: store.userDataURL(for: profile),
-                fileManager: fileManager
-            )
-        }
+        try CloneLaunchEnvironment.seedIfNeeded(recipe: recipe, profile: profile, store: store)
 
         let wrapperURL = TwoCursorsPaths.wrappersDirectory(fileManager: fileManager)
             .appendingPathComponent(profile.wrapperFileName)
         if preferWrapper, fileManager.fileExists(atPath: wrapperURL.path) {
             let config = NSWorkspace.OpenConfiguration()
-            config.createsNewApplicationInstance = true
+            // A cloned bundle is a real app: reopening it should focus the running copy.
+            config.createsNewApplicationInstance = !recipe.clonesAppBundle
             config.activates = true
             workspace.openApplication(at: wrapperURL, configuration: config) { _, error in
                 if let error {
@@ -65,18 +55,7 @@ public struct ProfileLauncher {
     ) throws {
         let userData = store.userDataURL(for: profile)
         let extensions = store.extensionsURL(for: profile)
-        var env = ProcessInfo.processInfo.environment
-        env.removeValue(forKey: "ELECTRON_RUN_AS_NODE")
-        if profile.isolation == .fullHomeOverlay {
-            let overlay = store.overlayHomeURL(for: profile)
-            try HomeOverlay.prepare(
-                overlayRoot: overlay,
-                realHome: TwoCursorsPaths.accountHome(fileManager: fileManager),
-                fileManager: fileManager
-            )
-            env["HOME"] = overlay.path
-            env["CURSOR_DATA_DIR"] = overlay.appendingPathComponent(".cursor").path
-        }
+        let env = try CloneLaunchEnvironment.make(profile: profile, store: store, recipe: recipe)
 
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true

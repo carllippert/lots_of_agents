@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import TwoCursorsCore
 
@@ -6,6 +7,11 @@ enum TwoCursorsTests {
     static var failures = 0
 
     static func main() {
+        if let index = CommandLine.arguments.firstIndex(of: "--refresh-wrappers"),
+           CommandLine.arguments.indices.contains(index + 1) {
+            refreshInstalledWrappers(launcher: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+            return
+        }
         detectFixture()
         detectFixtureGrok()
         ignoreWrongBundleID()
@@ -28,6 +34,11 @@ enum TwoCursorsTests {
         seedGrokNoGallery()
         mergeSettings()
         homeOverlay()
+        homeOverlayHealsCodexSymlink()
+        homeOverlayIsolatesChatGPTSupport()
+        rasterizedOfficialIcons()
+        chatGPTLaunchEnvironment()
+        chatGPTClonesBundle()
         parseFlags()
         ownProcessArgs()
         writeICNS()
@@ -39,6 +50,38 @@ enum TwoCursorsTests {
             print("\(failures) test(s) failed.")
             exit(1)
         }
+    }
+
+    static func chatGPTClonesBundle() {
+        check(ChatGPTRecipe().clonesAppBundle, "ChatGPT clones get their own app bundle")
+        check(!GrokRecipe().clonesAppBundle, "Grok keeps the thin wrapper")
+        let source: [String: Any] = [
+            "CFBundleIdentifier": "com.openai.codex",
+            "CFBundleExecutable": "ChatGPT",
+            "CFBundleName": "ChatGPT",
+            "CFBundleIconName": "Icon",
+            "CFBundleIconFile": "electron.icns",
+            "CFBundleURLTypes": [["CFBundleURLSchemes": ["codex"]]],
+            "SUPublicEDKey": "key",
+        ]
+        let plist = BundleCloner.cloneInfoPlist(
+            source: source,
+            bundleIdentifier: "app.lotsofagents.clone.chatgpt.work",
+            displayName: "ChatGPT Work",
+            extra: ["TwoCursorsProfileID": "x"]
+        )
+        check(plist["CFBundleIdentifier"] as? String == "app.lotsofagents.clone.chatgpt.work", "clone bundle ID")
+        check(plist["CFBundleName"] as? String == "ChatGPT Work", "clone name")
+        check(plist["CFBundleExecutable"] as? String == "TwoCursorsLauncher", "launcher is main executable")
+        check(plist[BundleCloner.realExecutableKey] as? String == "ChatGPT", "remembers real executable")
+        check(plist["CFBundleIconName"] == nil, "asset-catalog icon removed so AppIcon.icns wins")
+        check(plist["CFBundleIconFile"] as? String == "AppIcon", "clone icon file")
+        check(plist["CFBundleURLTypes"] == nil, "clone does not claim codex:// links")
+        check(plist["SUEnableAutomaticChecks"] as? Bool == false, "clone does not self-update")
+        check(plist["TwoCursorsProfileID"] as? String == "x", "extra keys merged")
+
+        let profile = Profile(name: "Work", slug: "work", recipeID: "chatgpt")
+        check(profile.wrapperDisplayName == "ChatGPT Work", "display name: \(profile.wrapperDisplayName)")
     }
 
     static func check(_ condition: Bool, _ message: String, file: String = #fileID, line: Int = #line) {
@@ -241,6 +284,86 @@ enum TwoCursorsTests {
         }
     }
 
+    static func homeOverlayHealsCodexSymlink() {
+        do {
+            let fm = FileManager.default
+            let real = fm.temporaryDirectory.appendingPathComponent("tc-heal-real-\(UUID().uuidString)")
+            let overlay = fm.temporaryDirectory.appendingPathComponent("tc-heal-over-\(UUID().uuidString)")
+            try fm.createDirectory(at: real.appendingPathComponent(".codex"), withIntermediateDirectories: true)
+            try "real-login".write(to: real.appendingPathComponent(".codex/auth.json"), atomically: true, encoding: .utf8)
+            try fm.createDirectory(at: overlay, withIntermediateDirectories: true)
+            try fm.createSymbolicLink(
+                at: overlay.appendingPathComponent(".codex"),
+                withDestinationURL: real.appendingPathComponent(".codex")
+            )
+            try HomeOverlay.prepare(overlayRoot: overlay, realHome: real)
+            let codex = overlay.appendingPathComponent(".codex")
+            check(!((try codex.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink ?? false), "healed .codex is real")
+            check(!fm.fileExists(atPath: codex.appendingPathComponent("auth.json").path), "does not copy real login when healing")
+        } catch {
+            check(false, "homeOverlayHealsCodexSymlink \(error)")
+        }
+    }
+
+    static func homeOverlayIsolatesChatGPTSupport() {
+        do {
+            let fm = FileManager.default
+            let real = fm.temporaryDirectory.appendingPathComponent("tc-gpt-real-\(UUID().uuidString)")
+            let overlay = fm.temporaryDirectory.appendingPathComponent("tc-gpt-over-\(UUID().uuidString)")
+            let support = real.appendingPathComponent("Library/Application Support", isDirectory: true)
+            try fm.createDirectory(at: support.appendingPathComponent("OpenAI/Codex"), withIntermediateDirectories: true)
+            try "shared".write(to: support.appendingPathComponent("OpenAI/session"), atomically: true, encoding: .utf8)
+            try fm.createDirectory(at: real.appendingPathComponent("Library/Preferences"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: real.appendingPathComponent(".codex"), withIntermediateDirectories: true)
+            try HomeOverlay.prepare(overlayRoot: overlay, realHome: real, recipeID: ChatGPTRecipe().id)
+            check(HomeOverlay.isFullOverlay(overlayRoot: overlay, realHome: real, recipeID: ChatGPTRecipe().id), "chatgpt overlay complete")
+
+            let isolated = overlay.appendingPathComponent("Library/Application Support/OpenAI")
+            check(!((try isolated.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink ?? false), "OpenAI support is real")
+            check(!fm.fileExists(atPath: isolated.appendingPathComponent("session").path), "does not share official OpenAI session")
+
+            let prefs = overlay.appendingPathComponent("Library/Preferences")
+            check((try prefs.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink == true, "Library/Preferences stays a symlink")
+
+            let library = overlay.appendingPathComponent("Library")
+            check(!((try library.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink ?? false), "Library is a real split dir")
+        } catch {
+            check(false, "homeOverlayIsolatesChatGPTSupport \(error)")
+        }
+    }
+
+    static func rasterizedOfficialIcons() {
+        for recipeID in ["grok", "chatgpt", "claude", "cursor"] {
+            let app = IconComposer.officialAppURL(for: recipeID)
+            guard FileManager.default.fileExists(atPath: app.path) else { continue }
+            guard let icon = IconComposer.rasterizedAppIcon(from: app) else {
+                check(false, "\(recipeID) rasterized icon missing")
+                continue
+            }
+            check(IconComposer.isUsableIcon(icon), "\(recipeID) rasterized icon is usable")
+        }
+    }
+
+    static func chatGPTLaunchEnvironment() {
+        do {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent("tc-env-\(UUID().uuidString)")
+            let store = try ProfileStore(root: root)
+            let profile = try store.create(name: "Work", recipeID: "chatgpt")
+            let env = try CloneLaunchEnvironment.make(
+                profile: profile,
+                store: store,
+                recipe: ChatGPTRecipe(),
+                base: ["ELECTRON_RUN_AS_NODE": "1", "PATH": "/usr/bin"]
+            )
+            check(env["ELECTRON_RUN_AS_NODE"] == nil, "strips ELECTRON_RUN_AS_NODE")
+            check(env["CODEX_HOME"] == store.overlayHomeURL(for: profile).appendingPathComponent(".codex").path, "CODEX_HOME")
+            check(env["CODEX_ELECTRON_USER_DATA_PATH"] == store.userDataURL(for: profile).path, "CODEX_ELECTRON_USER_DATA_PATH")
+            check(env["HOME"] == store.overlayHomeURL(for: profile).path, "HOME is overlay")
+        } catch {
+            check(false, "chatGPTLaunchEnvironment \(error)")
+        }
+    }
+
     static func parseFlags() {
         check(ProcessArguments.userDataDir(from: ["Cursor", "--user-data-dir=/tmp/a"]) == "/tmp/a", "equals form")
         check(ProcessArguments.userDataDir(from: ["Cursor", "--user-data-dir", "/tmp/b"]) == "/tmp/b", "split form")
@@ -331,6 +454,7 @@ enum TwoCursorsTests {
         check(recipe.executableName == "Grok Bot", "exec")
         check(recipe.urlSchemes == ["sand"], "scheme")
         check(!recipe.seedsMarketplace, "no marketplace")
+        check(recipe.seedsUpdateDisabled, "grok may seed update.mode")
         check(recipe.supportsUserDataDir, "electron flags")
         check(RecipeRegistry.all.first?.id == "grok", "grok is primary recipe")
         check(RecipeRegistry.all.contains { $0.id == "cursor" }, "cursor still registered")
@@ -346,7 +470,9 @@ enum TwoCursorsTests {
         check(recipe.executableName == "ChatGPT", "exec")
         check(recipe.urlSchemes == ["codex"], "scheme")
         check(!recipe.seedsMarketplace, "no marketplace")
+        check(!recipe.seedsUpdateDisabled, "chatgpt does not get vscode settings")
         check(recipe.supportsUserDataDir, "electron flags")
+        check(recipe.forcesFullHomeOverlay, "forces overlay")
     }
 
     static func detectFixtureChatGPT() {
@@ -386,6 +512,7 @@ enum TwoCursorsTests {
         check(recipe.executableName == "Claude", "exec")
         check(recipe.urlSchemes == ["claude"], "scheme")
         check(!recipe.seedsMarketplace, "no marketplace")
+        check(!recipe.seedsUpdateDisabled, "claude does not get vscode settings")
         check(recipe.supportsUserDataDir, "electron flags")
     }
 
@@ -435,6 +562,23 @@ enum TwoCursorsTests {
         check(Profile.makeSlug("Work") == "work", "work")
         check(Profile.makeSlug("Client A") == "client-a", "client")
         check(Profile.makeSlug("!!!") == "clone", "fallback")
+    }
+
+    static func refreshInstalledWrappers(launcher: URL) {
+        do {
+            let store = try ProfileStore()
+            let builder = WrapperAppBuilder()
+            for profile in store.profiles {
+                try store.prepareDirectories(for: profile)
+                let image = IconComposer.image(from: profile.icon, base: IconComposer.baseIcon(for: profile.recipeID))
+                let dest = try builder.install(profile: profile, store: store, launcherBinary: launcher, iconImage: image)
+                print("Refreshed \(dest.path)")
+            }
+            print("Refreshed \(store.profiles.count) wrapper(s).")
+        } catch {
+            FileHandle.standardError.write(Data("refresh failed: \(error.localizedDescription)\n".utf8))
+            exit(1)
+        }
     }
 }
 

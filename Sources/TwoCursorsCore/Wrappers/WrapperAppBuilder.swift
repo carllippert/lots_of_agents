@@ -67,6 +67,11 @@ public struct WrapperAppBuilder {
             throw TwoCursorsError.wrapperFailed("Launcher binary missing at \(launcherBinary.path)")
         }
 
+        if let recipe = RecipeRegistry.recipe(id: profile.recipeID), recipe.clonesAppBundle {
+            try writeClonedBundle(profile: profile, store: store, recipe: recipe, at: dest, launcherBinary: launcherBinary)
+            return
+        }
+
         let contents = dest.appendingPathComponent("Contents")
         let macos = contents.appendingPathComponent("MacOS")
         let resources = contents.appendingPathComponent("Resources")
@@ -81,18 +86,19 @@ public struct WrapperAppBuilder {
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: execDest.path)
 
         let icns = resources.appendingPathComponent("AppIcon.icns")
-        let image = iconImage ?? IconComposer.image(from: profile.icon, base: IconComposer.baseIcon(for: profile.recipeID))
-        try IconComposer.writeICNS(spec: profile.icon, to: icns, base: IconComposer.baseIcon(for: profile.recipeID))
-        try IconComposer.writeICNS(spec: profile.icon, to: store.iconURL(for: profile), base: IconComposer.baseIcon(for: profile.recipeID))
+        let base = IconComposer.baseIcon(for: profile.recipeID)
+        try IconComposer.writeICNS(spec: profile.icon, to: icns, base: base)
+        try IconComposer.writeICNS(spec: profile.icon, to: store.iconURL(for: profile), base: base)
 
         let plist: [String: Any] = [
             "CFBundleDevelopmentRegion": "en",
             "CFBundleExecutable": "TwoCursorsLauncher",
             "CFBundleIconFile": "AppIcon",
+            "CFBundleIconName": "AppIcon",
             "CFBundleIdentifier": profile.wrapperBundleIdentifier,
             "CFBundleInfoDictionaryVersion": "6.0",
-            "CFBundleName": "\(RecipeRegistry.recipe(id: profile.recipeID)?.displayName ?? "App") \(profile.name)",
-            "CFBundleDisplayName": "\(RecipeRegistry.recipe(id: profile.recipeID)?.displayName ?? "App") \(profile.name)",
+            "CFBundleName": profile.wrapperDisplayName,
+            "CFBundleDisplayName": profile.wrapperDisplayName,
             "CFBundlePackageType": "APPL",
             "CFBundleShortVersionString": "1.0",
             "CFBundleVersion": "1",
@@ -107,9 +113,57 @@ public struct WrapperAppBuilder {
         let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         try data.write(to: plistURL, options: .atomic)
 
-        _ = IconComposer.applyFinderIcon(image: image, to: dest)
+        IconComposer.removeCustomIconOverride(from: dest, fileManager: fileManager)
         adHocSign(dest)
         touch(dest)
+        Self.refreshLaunchServices(for: dest)
+    }
+
+    private func writeClonedBundle(
+        profile: Profile,
+        store: ProfileStore,
+        recipe: any AppRecipe,
+        at dest: URL,
+        launcherBinary: URL
+    ) throws {
+        // Never swap the bundle out from under a running clone; it picks up changes next launch.
+        if fileManager.fileExists(atPath: dest.path),
+           NSRunningApplication.runningApplications(withBundleIdentifier: profile.wrapperBundleIdentifier)
+               .contains(where: { $0.processIdentifier != getpid() }) {
+            return
+        }
+        let status = recipe.detect(using: InstalledAppDetector())
+        guard status.isInstalled, let source = status.appURL else {
+            throw TwoCursorsError.appNotInstalled(recipe.displayName)
+        }
+        let base = IconComposer.baseIcon(for: profile.recipeID)
+        try IconComposer.writeICNS(spec: profile.icon, to: store.iconURL(for: profile), base: base)
+        try BundleCloner(fileManager: fileManager).build(
+            source: source,
+            dest: dest,
+            bundleIdentifier: profile.wrapperBundleIdentifier,
+            displayName: profile.wrapperDisplayName,
+            launcherBinary: launcherBinary,
+            writeIcon: { try IconComposer.writeICNS(spec: profile.icon, to: $0, base: base) },
+            extraInfo: [
+                "TwoCursorsProfileID": profile.id.uuidString,
+                "TwoCursorsRecipeID": profile.recipeID,
+                "TwoCursorsCatalog": store.catalogURL.path,
+            ]
+        )
+        IconComposer.removeCustomIconOverride(from: dest, fileManager: fileManager)
+        touch(dest)
+        Self.refreshLaunchServices(for: dest)
+    }
+
+    public static func refreshLaunchServices(for appURL: URL) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister")
+        process.arguments = ["-f", "-R", appURL.path]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try? process.run()
+        process.waitUntilExit()
     }
 
     public static func locateLauncherBinary() -> URL? {

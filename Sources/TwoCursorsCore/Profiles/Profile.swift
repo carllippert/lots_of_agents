@@ -22,7 +22,7 @@ public enum IsolationMode: String, Codable, CaseIterable, Identifiable, Sendable
         case .userDataDir:
             return "Separate login, chats, settings, and extensions. Git, SSH, and your shell keep using your real home."
         case .fullHomeOverlay:
-            return "Same as above, plus a private ~/.cursor and ~/.codex per clone. Needed for apps like ChatGPT that store login/session outside the profile dir — otherwise every clone shares one login. Your real home is fully symlinked in otherwise."
+            return "Same as above, plus a private ~/.cursor and ~/.codex per clone. ChatGPT also gets its own Library/Application Support/OpenAI. Needed for apps that store login/session outside the profile dir — otherwise every clone shares one login. Your real home is fully symlinked in otherwise."
         }
     }
 
@@ -118,6 +118,11 @@ public struct Profile: Identifiable, Codable, Equatable, Sendable {
             return "\(trimmed).app"
         }
         return "\(recipe) \(trimmed).app"
+    }
+
+    /// Name shown in the menu bar, Dock, and Cmd-Tab — the wrapper file name without ".app".
+    public var wrapperDisplayName: String {
+        String(wrapperFileName.dropLast(".app".count))
     }
 
     public var wrapperBundleIdentifier: String {

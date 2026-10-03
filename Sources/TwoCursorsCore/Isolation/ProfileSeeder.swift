@@ -1,7 +1,8 @@
 import Foundation
 
 /// Seeds a brand-new Electron user-data dir.
-/// Cursor gets the VS Marketplace URL; Grok Bot only disables in-clone Squirrel updates.
+/// Cursor gets the VS Marketplace URL. Grok Bot may get a harmless `update.mode=none`
+/// settings file that it does not actually read. ChatGPT and Claude are not seeded.
 public enum ProfileSeeder {
     public static let marketplaceServiceURL = "https://marketplace.visualstudio.com/_apis/public/gallery"
     public static let marketplaceItemURL = "https://marketplace.visualstudio.com/items"

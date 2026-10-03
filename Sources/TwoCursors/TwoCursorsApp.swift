@@ -115,11 +115,7 @@ final class AppModel: ObservableObject {
                 adoptsDefaultData: adoptsDefaultData
             )
             if let recipe = RecipeRegistry.recipe(id: profile.recipeID) {
-                if recipe.seedsMarketplace {
-                    try ProfileSeeder.seedUserData(at: store.userDataURL(for: profile), icon: profile.icon)
-                } else if recipe.supportsUserDataDir {
-                    try ProfileSeeder.seedUpdateDisabled(at: store.userDataURL(for: profile))
-                }
+                try CloneLaunchEnvironment.seedIfNeeded(recipe: recipe, profile: profile, store: store)
             }
             try installSupport(for: profile)
             profiles = store.profiles
@@ -228,11 +224,10 @@ final class AppModel: ObservableObject {
     }
 
     private func reapplyIconsIfNeeded() {
-        for profile in profiles where liveIDs.contains(profile.id) {
+        for profile in profiles {
             let url = wrappers.wrapperURL(for: profile)
             guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            let image = IconComposer.image(from: profile.icon, base: IconComposer.baseIcon(for: profile.recipeID))
-            _ = IconComposer.applyFinderIcon(image: image, to: url)
+            IconComposer.removeCustomIconOverride(from: url)
         }
     }
 }

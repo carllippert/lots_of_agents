@@ -151,6 +151,7 @@ public final class ProfileStore {
             try HomeOverlay.prepare(
                 overlayRoot: overlayHomeURL(for: profile),
                 realHome: TwoCursorsPaths.accountHome(fileManager: fileManager),
+                recipeID: profile.recipeID,
                 fileManager: fileManager
             )
         }

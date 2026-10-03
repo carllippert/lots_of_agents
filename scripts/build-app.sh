@@ -12,11 +12,15 @@ IDENTITY="${CODESIGN_IDENTITY:--}"
 echo "Building arm64 and x86_64 release binaries…"
 # Combined --arch arm64 --arch x86_64 needs full Xcode xcbuild. CLT can
 # cross-compile one arch at a time; we lipo afterward.
+# ARM64_ONLY=1 skips the x86_64 slice for a quick local install on Apple Silicon.
 swift build -c release --arch arm64
-swift build -c release --arch x86_64
-
 BIN_ARM="$(swift build -c release --arch arm64 --show-bin-path)"
-BIN_X86="$(swift build -c release --arch x86_64 --show-bin-path)"
+if [ "${ARM64_ONLY:-0}" = "1" ]; then
+  BIN_X86="/nonexistent"
+else
+  swift build -c release --arch x86_64
+  BIN_X86="$(swift build -c release --arch x86_64 --show-bin-path)"
+fi
 
 lipo_or_copy() {
   local name="$1"
