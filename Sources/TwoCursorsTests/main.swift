@@ -55,7 +55,8 @@ enum TwoCursorsTests {
     static func chatGPTClonesBundle() {
         check(ChatGPTRecipe().clonesAppBundle, "ChatGPT clones get their own app bundle")
         check(ClaudeRecipe().clonesAppBundle, "Claude clones get their own app bundle")
-        check(!GrokRecipe().clonesAppBundle, "Grok keeps the thin wrapper")
+        check(GrokRecipe().clonesAppBundle, "Grok clones get their own app bundle")
+        check(CursorRecipe().clonesAppBundle, "Cursor clones get their own app bundle")
         check(BundleCloner.isTeamBoundEntitlement("keychain-access-groups"), "drops keychain groups")
         check(BundleCloner.isTeamBoundEntitlement("com.apple.developer.team-identifier"), "drops team ID")
         check(!BundleCloner.isTeamBoundEntitlement("com.apple.security.virtualization"), "keeps virtualization")

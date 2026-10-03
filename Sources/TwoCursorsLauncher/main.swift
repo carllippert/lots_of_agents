@@ -8,6 +8,7 @@ enum TwoCursorsLauncherMain {
     static let delegate = LauncherDelegate()
 
     static func main() {
+        upgradeFromLotsOfAgentsIfNeeded()
         let info = Bundle.main.infoDictionary ?? [:]
         let recipeID = info["TwoCursorsRecipeID"] as? String ?? ""
         // Old-style wrappers for a cloning recipe convert themselves on first launch.
@@ -28,6 +29,30 @@ enum TwoCursorsLauncherMain {
         app.delegate = delegate
         app.activate(ignoringOtherApps: true)
         app.run()
+    }
+
+    /// A wrapper carries a copy of the launcher from whichever Lots of Agents built it. When the
+    /// installed Lots of Agents has a newer launcher, rebuild this wrapper with it and re-exec, so
+    /// fixes reach clones the next time they open (not only when Lots of Agents itself restarts).
+    static func upgradeFromLotsOfAgentsIfNeeded() {
+        guard let manager = NSWorkspace.shared.urlForApplication(withBundleIdentifier: TwoCursorsPaths.appBundleIdentifier) else {
+            return
+        }
+        let managerLauncher = manager.appendingPathComponent("Contents/MacOS/TwoCursorsLauncher")
+        guard FileManager.default.isExecutableFile(atPath: managerLauncher.path),
+              Bundle.main.infoDictionary?[WrapperAppBuilder.launcherStampKey] as? String
+                != WrapperAppBuilder.launcherStamp(managerLauncher),
+              let (profile, store, _) = try? loadProfile(),
+              let rebuilt = try? WrapperAppBuilder().install(profile: profile, store: store, launcherBinary: managerLauncher) else {
+            return
+        }
+        let info = NSDictionary(contentsOf: rebuilt.appendingPathComponent("Contents/Info.plist"))
+        guard info?[WrapperAppBuilder.launcherStampKey] as? String == WrapperAppBuilder.launcherStamp(managerLauncher) else {
+            return // rebuild was skipped (e.g. clone already running); carry on with this copy
+        }
+        let launcher = rebuilt.appendingPathComponent("Contents/MacOS/TwoCursorsLauncher").path
+        var argv = ([launcher] + CommandLine.arguments.dropFirst()).map { strdup($0) } + [nil]
+        execv(launcher, &argv)
     }
 
     static func applyWrapperIcon() {
@@ -57,7 +82,7 @@ enum TwoCursorsLauncherMain {
 
         let env = try CloneLaunchEnvironment.make(profile: profile, store: store, recipe: recipe)
         let extra = recipe.launchArguments(
-            userData: store.userDataURL(for: profile),
+            userData: try CloneLaunchEnvironment.userDataArgumentURL(profile: profile, store: store, recipe: recipe),
             extensions: store.extensionsURL(for: profile)
         ) + Array(CommandLine.arguments.dropFirst())
 
@@ -95,7 +120,7 @@ enum TwoCursorsLauncherMain {
         // The re-signed clone is a different code identity, so the shared "Safe Storage" keychain
         // item would trigger a keychain prompt on every launch and after every rebuild.
         let arguments = recipe.launchArguments(
-            userData: store.userDataURL(for: profile),
+            userData: try CloneLaunchEnvironment.userDataArgumentURL(profile: profile, store: store, recipe: recipe),
             extensions: store.extensionsURL(for: profile)
         ) + ["--use-mock-keychain"] + Array(CommandLine.arguments.dropFirst())
 

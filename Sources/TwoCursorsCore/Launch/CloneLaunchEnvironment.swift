@@ -30,6 +30,22 @@ public enum CloneLaunchEnvironment {
         return env
     }
 
+    /// `--user-data-dir` to hand the app. For recipes with `needsShortUserDataPath`, a short symlink
+    /// (`~/.lotsofagents/<recipe>-<slug>`) to the real profile folder.
+    public static func userDataArgumentURL(profile: Profile, store: ProfileStore, recipe: any AppRecipe) throws -> URL {
+        let real = store.userDataURL(for: profile)
+        guard recipe.needsShortUserDataPath, !profile.adoptsDefaultData else { return real }
+        let fm = store.fileManager
+        let dir = TwoCursorsPaths.accountHome(fileManager: fm).appendingPathComponent(".lotsofagents", isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let link = dir.appendingPathComponent("\(profile.recipeID)-\(profile.slug)")
+        if (try? fm.destinationOfSymbolicLink(atPath: link.path)) != real.path {
+            try? fm.removeItem(at: link)
+            try fm.createSymbolicLink(at: link, withDestinationURL: real)
+        }
+        return link
+    }
+
     public static func seedIfNeeded(recipe: any AppRecipe, profile: Profile, store: ProfileStore) throws {
         if recipe.seedsMarketplace {
             try ProfileSeeder.seedUserData(at: store.userDataURL(for: profile), icon: profile.icon)

@@ -53,7 +53,7 @@ public struct ProfileLauncher {
         store: ProfileStore,
         recipe: any AppRecipe
     ) throws {
-        let userData = store.userDataURL(for: profile)
+        let userData = try CloneLaunchEnvironment.userDataArgumentURL(profile: profile, store: store, recipe: recipe)
         let extensions = store.extensionsURL(for: profile)
         let env = try CloneLaunchEnvironment.make(profile: profile, store: store, recipe: recipe)
 
@@ -76,8 +76,8 @@ public struct ProfileLauncher {
         for app in running {
             let args = ProcessArguments.arguments(for: app.processIdentifier)
             guard let dir = ProcessArguments.userDataDir(from: args) else { continue }
-            if URL(fileURLWithPath: dir).standardizedFileURL
-                == URL(fileURLWithPath: userData).standardizedFileURL {
+            if URL(fileURLWithPath: dir).resolvingSymlinksInPath()
+                == URL(fileURLWithPath: userData).resolvingSymlinksInPath() {
                 app.terminate()
             }
         }
@@ -105,9 +105,9 @@ public enum RunningCloneDetector {
         for app in apps {
             let args = ProcessArguments.arguments(for: app.processIdentifier)
             guard let dir = ProcessArguments.userDataDir(from: args) else { continue }
-            let standardized = URL(fileURLWithPath: dir).standardizedFileURL
+            let standardized = URL(fileURLWithPath: dir).resolvingSymlinksInPath()
             for profile in profiles {
-                let expected = store.userDataURL(for: profile).standardizedFileURL
+                let expected = store.userDataURL(for: profile).resolvingSymlinksInPath()
                 if expected == standardized {
                     live.insert(profile.id)
                 }

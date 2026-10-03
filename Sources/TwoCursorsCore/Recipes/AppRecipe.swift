@@ -15,6 +15,10 @@ public struct GrokRecipe: AppRecipe {
     public let supportsUserDataDir = true
     public let downloadURL = URL(string: "https://cursor.com/bot/onboarding")!
 
+    /// Stock Electron: the spawned child registers as the official app, so the clone needs its own
+    /// bundle to keep its name/icon in the Dock and Cmd-Tab (see `BundleCloner`).
+    public let clonesAppBundle = true
+
     public init() {}
 }
 
@@ -31,6 +35,14 @@ public struct CursorRecipe: AppRecipe {
     public let seedsMarketplace = true
     public let supportsUserDataDir = true
     public let downloadURL = URL(string: "https://cursor.com")!
+
+    /// Stock Electron: the spawned child registers as the official app, so the clone needs its own
+    /// bundle to keep its name/icon in the Dock and Cmd-Tab (see `BundleCloner`).
+    public let clonesAppBundle = true
+
+    /// VS Code puts its IPC socket inside --user-data-dir on macOS, and socket paths cap at 103
+    /// chars; the profile folder under Application Support is too long.
+    public let needsShortUserDataPath = true
 
     public init() {}
 }
@@ -94,6 +106,7 @@ public protocol AppRecipe {
     var seedsMarketplace: Bool { get }
     var seedsUpdateDisabled: Bool { get }
     var clonesAppBundle: Bool { get }
+    var needsShortUserDataPath: Bool { get }
     var supportsUserDataDir: Bool { get }
     var downloadURL: URL { get }
 
@@ -105,6 +118,7 @@ public extension AppRecipe {
     var forcesFullHomeOverlay: Bool { false }
     var seedsUpdateDisabled: Bool { false }
     var clonesAppBundle: Bool { false }
+    var needsShortUserDataPath: Bool { false }
 
     func detect(using detector: InstalledAppDetector) -> AppStatus {
         detector.detect(

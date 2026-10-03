@@ -4,7 +4,7 @@
 
 Each Lots of Agents clone is a thin wrapper app that launches the official Grok Bot / Cursor / Claude / ChatGPT binary while preserving its own identity in macOS Launch Services and the Cmd-Tab switcher.
 
-## ChatGPT / Codex and Claude: cloned bundles
+## Cloned bundles (all recipes)
 
 The thin wrapper below does **not** work for ChatGPT (Codex). The spawned child still
 registers with Launch Services as `com.openai.codex`, so Spotlight / Dock / Cmd-Tab treat every
@@ -14,7 +14,7 @@ and the clone's window shows the stock icon.
 Claude has the same problem, and it also breaks sign-in: the browser hands the login back via
 `claude://`, which Launch Services delivers to the main Claude app instead of the clone.
 
-Recipes with `clonesAppBundle = true` (ChatGPT, Claude) instead get a real per-clone app built by
+Recipes with `clonesAppBundle = true` (all four: Grok Bot, Cursor, Claude, ChatGPT) instead get a real per-clone app built by
 `BundleCloner`:
 
 - `cp -c -R` APFS clone of `/Applications/ChatGPT.app` (near-zero disk cost)
@@ -29,7 +29,10 @@ Recipes with `clonesAppBundle = true` (ChatGPT, Claude) instead get a real per-c
   `--use-mock-keychain` — one process, one app, the clone's name and icon everywhere
 - Updates: Sparkle / Squirrel are disabled in the clone and their installers removed (it would install the stock
   app over the clone). `/Applications/ChatGPT.app` updates itself; the launcher rebuilds the clone
-  whenever the source version changes. Lots of Agents rebuilds wrappers built by an older launcher (`TwoCursorsLauncherStamp`) at startup.
+  whenever the source version changes. Lots of Agents rebuilds wrappers built by an older launcher (`TwoCursorsLauncherStamp`) at startup,
+  and a wrapper's launcher upgrades itself from the installed Lots of Agents when it opens.
+- Cursor (VS Code) puts its IPC socket in `--user-data-dir` and macOS caps socket paths at 103
+  chars, so Cursor clones get `--user-data-dir=~/.lotsofagents/cursor-<slug>` (a symlink).
 
 ## Structure
 
