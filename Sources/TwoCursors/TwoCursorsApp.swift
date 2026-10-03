@@ -53,7 +53,26 @@ final class AppModel: ObservableObject {
     }
 
     var selected: Profile? {
-        profiles.first { $0.id == selectedID } ?? profiles.first
+        // A primary (official) install is selected: there is no profile to edit or delete.
+        if selectedPrimaryRecipeID != nil { return nil }
+        return profiles.first { $0.id == selectedID } ?? profiles.first
+    }
+
+    /// Sidebar tag for an app's official install. The sidebar selects by UUID, so each recipe gets
+    /// a fixed UUID that can never collide with a random profile ID.
+    static func primaryID(for recipeID: String) -> UUID {
+        let index = RecipeRegistry.all.firstIndex { $0.id == recipeID } ?? 0
+        return UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index + 1))!
+    }
+
+    /// Recipe whose official install is selected in the sidebar, if any.
+    var selectedPrimaryRecipeID: String? {
+        RecipeRegistry.all.first { Self.primaryID(for: $0.id) == selectedID }?.id
+    }
+
+    func openPrimary(_ recipeID: String) {
+        guard let url = status(for: recipeID).appURL else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
     func status(for recipeID: String) -> AppStatus {

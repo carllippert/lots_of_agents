@@ -8,8 +8,12 @@ struct ProfileListView: View {
         List(selection: $model.selectedID) {
             ForEach(RecipeRegistry.all, id: \.id) { recipe in
                 let clones = model.profiles.filter { $0.recipeID == recipe.id }
-                if !clones.isEmpty {
+                let installed = model.status(for: recipe.id).isInstalled
+                if installed || !clones.isEmpty {
                     Section(recipe.displayName) {
+                        if installed {
+                            primaryRow(recipe)
+                        }
                         ForEach(clones) { profile in
                             row(profile)
                         }
@@ -33,6 +37,20 @@ struct ProfileListView: View {
         }
     }
 
+    /// The official app in /Applications: listed so every install is visible, but not editable.
+    private func primaryRow(_ recipe: any AppRecipe) -> some View {
+        HStack(spacing: 10) {
+            OfficialIconView(recipeID: recipe.id, size: 28)
+            Text(recipe.displayName)
+            Spacer()
+            Image(systemName: "lock.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .help("Primary install — the official app. Its name and icon can't be changed.")
+        }
+        .tag(AppModel.primaryID(for: recipe.id))
+    }
+
     private func row(_ profile: Profile) -> some View {
         HStack(spacing: 10) {
             ProfileIconView(spec: profile.icon, size: 28, recipeID: profile.recipeID)
@@ -52,5 +70,22 @@ struct ProfileIconView: View {
             .resizable()
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+    }
+}
+
+struct OfficialIconView: View {
+    var recipeID: String
+    var size: CGFloat
+
+    var body: some View {
+        if let image = IconComposer.baseIcon(for: recipeID) {
+            Image(nsImage: image)
+                .resizable()
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: "app")
+                .resizable()
+                .frame(width: size, height: size)
+        }
     }
 }

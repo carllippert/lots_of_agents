@@ -23,7 +23,9 @@ struct ContentView: View {
                         .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 360)
                         .frame(minWidth: 240)
                 } detail: {
-                    if let profile = model.selected {
+                    if let recipeID = model.selectedPrimaryRecipeID {
+                        PrimaryInstallView(recipeID: recipeID)
+                    } else if let profile = model.selected {
                         ProfileDetailView(profile: profile)
                     } else if let recipeID = model.selectedRecipeID, model.profiles.isEmpty {
                         RecipeHubView(recipeID: recipeID)
